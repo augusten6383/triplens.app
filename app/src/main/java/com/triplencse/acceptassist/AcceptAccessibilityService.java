@@ -170,6 +170,9 @@ public class AcceptAccessibilityService extends AccessibilityService {
         }
 
         AccessibilityNodeInfo node = targetNode;
+        
+        android.os.Handler uiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        uiHandler.post(() -> android.widget.Toast.makeText(this, "Accept Assist: Button found! Clicking...", android.widget.Toast.LENGTH_SHORT).show());
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             Rect bounds = new Rect();
@@ -179,11 +182,14 @@ public class AcceptAccessibilityService extends AccessibilityService {
 
             Path clickPath = new Path();
             clickPath.moveTo(x, y);
-            GestureDescription.StrokeDescription clickStroke = new GestureDescription.StrokeDescription(clickPath, 0, 50);
+            clickPath.lineTo(x + 1, y + 1); // Tiny movement to ensure Android registers it as a valid touch
+            
+            // Increased duration to 150ms to ensure it's not ignored as a phantom touch
+            GestureDescription.StrokeDescription clickStroke = new GestureDescription.StrokeDescription(clickPath, 0, 150);
             GestureDescription.Builder clickBuilder = new GestureDescription.Builder();
             clickBuilder.addStroke(clickStroke);
 
-            boolean dispatched = dispatchGesture(clickBuilder.build(), new GestureResultCallback() {
+            dispatchGesture(clickBuilder.build(), new GestureResultCallback() {
                 @Override
                 public void onCompleted(GestureDescription gestureDescription) {
                     super.onCompleted(gestureDescription);
@@ -191,11 +197,9 @@ public class AcceptAccessibilityService extends AccessibilityService {
                 }
             }, null);
 
-            if (!dispatched) {
-                // Fallback to normal click if gesture fails
-                if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-                    prefs.edit().putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis()).apply();
-                }
+            // Also try normal click simultaneously just in case
+            if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                prefs.edit().putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis()).apply();
             }
         } else {
             // Fallback for very old Android versions
