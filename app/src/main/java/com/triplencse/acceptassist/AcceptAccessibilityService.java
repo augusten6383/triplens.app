@@ -16,6 +16,9 @@ import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.accessibilityservice.GestureDescription;
+import android.graphics.Path;
+import android.graphics.Rect;
 
 public class AcceptAccessibilityService extends AccessibilityService {
     private static final long CLICK_COOLDOWN_MS = 650;
@@ -141,10 +144,37 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return;
         }
 
-        if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-            prefs.edit()
-                    .putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis())
-                    .apply();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            Rect bounds = new Rect();
+            node.getBoundsInScreen(bounds);
+            int x = bounds.centerX();
+            int y = bounds.centerY();
+
+            Path clickPath = new Path();
+            clickPath.moveTo(x, y);
+            GestureDescription.StrokeDescription clickStroke = new GestureDescription.StrokeDescription(clickPath, 0, 50);
+            GestureDescription.Builder clickBuilder = new GestureDescription.Builder();
+            clickBuilder.addStroke(clickStroke);
+
+            boolean dispatched = dispatchGesture(clickBuilder.build(), new GestureResultCallback() {
+                @Override
+                public void onCompleted(GestureDescription gestureDescription) {
+                    super.onCompleted(gestureDescription);
+                    prefs.edit().putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis()).apply();
+                }
+            }, null);
+
+            if (!dispatched) {
+                // Fallback to normal click if gesture fails
+                if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                    prefs.edit().putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis()).apply();
+                }
+            }
+        } else {
+            // Fallback for very old Android versions
+            if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                prefs.edit().putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis()).apply();
+            }
         }
     }
 
