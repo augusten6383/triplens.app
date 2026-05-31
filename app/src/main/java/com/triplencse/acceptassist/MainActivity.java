@@ -26,11 +26,11 @@ import android.content.pm.PackageManager;
 public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private CheckBox enabledBox;
-    private EditText packageInput;
-    private EditText textInput;
-    private EditText delayInput;
+    private EditText minPickupInput;
+    private EditText maxPickupInput;
+    private EditText minDropInput;
+    private EditText maxDropInput;
     private TextView serviceStatus;
-    private TextView packageHint;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -106,40 +106,32 @@ public class MainActivity extends Activity {
         enabledBox.setChecked(prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false));
         root.addView(enabledBox, matchWrapWithTop(18));
 
-        packageHint = label("");
-        root.addView(packageHint, matchWrapWithTop(14));
-        packageInput = input(prefs.getString(AcceptPrefs.KEY_TARGET_PACKAGE, ""));
-        packageInput.setSingleLine(true);
-        root.addView(packageInput, matchWrapWithTop(6));
+        root.addView(label("Minimum Pickup Distance (km)"), matchWrapWithTop(14));
+        minPickupInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f)));
+        minPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        root.addView(minPickupInput, matchWrapWithTop(6));
 
-        root.addView(label("Button text or view id keywords, comma separated"), matchWrapWithTop(14));
-        textInput = input(prefs.getString(AcceptPrefs.KEY_TARGET_TEXT, AcceptPrefs.DEFAULT_TARGET_TEXT));
-        root.addView(textInput, matchWrapWithTop(6));
+        root.addView(label("Maximum Pickup Distance (km)"), matchWrapWithTop(14));
+        maxPickupInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f)));
+        maxPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        root.addView(maxPickupInput, matchWrapWithTop(6));
 
-        root.addView(label("Click delay in milliseconds, 50 to 100"), matchWrapWithTop(14));
-        delayInput = input(String.valueOf(prefs.getInt(AcceptPrefs.KEY_DELAY_MS, AcceptPrefs.DEFAULT_DELAY_MS)));
-        delayInput.setInputType(InputType.TYPE_CLASS_NUMBER);
-        delayInput.setSingleLine(true);
-        root.addView(delayInput, matchWrapWithTop(6));
+        root.addView(label("Minimum Drop Distance (km)"), matchWrapWithTop(14));
+        minDropInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f)));
+        minDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        root.addView(minDropInput, matchWrapWithTop(6));
+
+        root.addView(label("Maximum Drop Distance (km)"), matchWrapWithTop(14));
+        maxDropInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f)));
+        maxDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        root.addView(maxDropInput, matchWrapWithTop(6));
 
         Button save = primaryButton("Save settings");
         save.setOnClickListener(v -> saveSettings());
         root.addView(save, matchWrapWithTop(16));
 
-        Button fillSelf = secondaryButton("Use this app as test target");
-        fillSelf.setOnClickListener(v -> {
-            packageInput.setText(getPackageName());
-            textInput.setText("Accept");
-            saveSettings();
-        });
-        root.addView(fillSelf, matchWrapWithTop(10));
-
-        Button testPopup = secondaryButton("Show test popup");
-        testPopup.setOnClickListener(v -> showTestPopup());
-        root.addView(testPopup, matchWrapWithTop(10));
-
         TextView footer = new TextView(this);
-        footer.setText("Use the exact package name of your custom app, for example com.example.myapp. Android Accessibility must be enabled before clicking can work.");
+        footer.setText("Auto-accepting for com.rapido.rider. Distance limits are used to filter out trips you don't want.");
         footer.setTextColor(Color.rgb(92, 101, 100));
         footer.setTextSize(13);
         footer.setPadding(0, dp(18), 0, 0);
@@ -149,51 +141,34 @@ public class MainActivity extends Activity {
     }
 
     private void saveSettings() {
-        String packageName = packageInput.getText().toString().trim();
-        String text = textInput.getText().toString().trim();
-        int delay = parseDelay(delayInput.getText().toString());
-
-        if (enabledBox.isChecked() && TextUtils.isEmpty(packageName)) {
-            Toast.makeText(this, "Enter your custom app package name first", Toast.LENGTH_LONG).show();
-            return;
-        }
-        if (TextUtils.isEmpty(text)) {
-            text = AcceptPrefs.DEFAULT_TARGET_TEXT;
-        }
+        float minP = parseFloatSafely(minPickupInput.getText().toString());
+        float maxP = parseFloatSafely(maxPickupInput.getText().toString());
+        float minD = parseFloatSafely(minDropInput.getText().toString());
+        float maxD = parseFloatSafely(maxDropInput.getText().toString());
 
         prefs.edit()
                 .putBoolean(AcceptPrefs.KEY_ENABLED, enabledBox.isChecked())
-                .putString(AcceptPrefs.KEY_TARGET_PACKAGE, packageName)
-                .putString(AcceptPrefs.KEY_TARGET_TEXT, text)
-                .putInt(AcceptPrefs.KEY_DELAY_MS, delay)
+                .putFloat(AcceptPrefs.KEY_MIN_PICKUP, minP)
+                .putFloat(AcceptPrefs.KEY_MAX_PICKUP, maxP)
+                .putFloat(AcceptPrefs.KEY_MIN_DROP, minD)
+                .putFloat(AcceptPrefs.KEY_MAX_DROP, maxD)
                 .apply();
-        delayInput.setText(String.valueOf(delay));
         refreshStatus();
         Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show();
     }
 
-    private int parseDelay(String raw) {
+    private float parseFloatSafely(String raw) {
         try {
-            return AcceptPrefs.clampDelay(Integer.parseInt(raw.trim()));
+            return Float.parseFloat(raw.trim());
         } catch (NumberFormatException ex) {
-            return AcceptPrefs.DEFAULT_DELAY_MS;
+            return 0.0f;
         }
-    }
-
-    private void showTestPopup() {
-        new AlertDialog.Builder(this)
-                .setTitle("Test popup")
-                .setMessage("If enabled and this package is configured, the service should click Accept after the configured delay.")
-                .setPositiveButton("Accept", (dialog, which) -> Toast.makeText(this, "Accepted", Toast.LENGTH_SHORT).show())
-                .setNegativeButton("Cancel", null)
-                .show();
     }
 
     private void refreshStatus() {
         boolean serviceEnabled = isAccessibilityServiceEnabled();
         serviceStatus.setText(serviceEnabled ? "Accessibility service: enabled" : "Accessibility service: not enabled");
         serviceStatus.setTextColor(serviceEnabled ? Color.rgb(0, 106, 86) : Color.rgb(155, 72, 36));
-        packageHint.setText("Target app package name");
     }
 
     private boolean isAccessibilityServiceEnabled() {

@@ -93,10 +93,7 @@ public class AcceptAccessibilityService extends AccessibilityService {
         }
 
         String packageName = event.getPackageName().toString();
-        String targetPackage = prefs.getString(AcceptPrefs.KEY_TARGET_PACKAGE, "").trim();
-        if (TextUtils.isEmpty(targetPackage)) {
-            return;
-        }
+        String targetPackage = "com.rapido.rider";
 
         boolean targetWindowFound = false;
         if (packageName.equals(targetPackage)) {
@@ -125,8 +122,8 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return;
         }
 
-        int delayMs = AcceptPrefs.clampDelay(prefs.getInt(AcceptPrefs.KEY_DELAY_MS, AcceptPrefs.DEFAULT_DELAY_MS));
-        
+        int delayMs = 50; // Hardcoded delay
+
         // Remove any previously scheduled checks and reschedule for [delayMs] after the LATEST event
         handler.removeCallbacksAndMessages(null);
         handler.postDelayed(() -> {
@@ -146,17 +143,18 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return;
         }
 
-        String targetText = prefs.getString(AcceptPrefs.KEY_TARGET_TEXT, AcceptPrefs.DEFAULT_TARGET_TEXT);
+        String targetText = "Accept";
         AccessibilityNodeInfo targetNode = null;
+        StringBuilder allText = new StringBuilder();
 
         java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
         for (android.view.accessibility.AccessibilityWindowInfo window : windows) {
             AccessibilityNodeInfo root = window.getRoot();
             if (root != null && root.getPackageName() != null && packageName.equals(root.getPackageName().toString())) {
+                collectAllText(root, allText);
                 AccessibilityNodeInfo match = findClickableMatch(root, targetText);
                 if (match != null) {
                     targetNode = match;
-                    break;
                 }
             }
         }
@@ -165,10 +163,52 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return;
         }
 
-        AccessibilityNodeInfo node = targetNode;
+        // --- Distance Filtering Logic ---
+        float minPickup = prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f);
+        float maxPickup = prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f);
+        float minDrop = prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f);
+        float maxDrop = prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f);
+
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("([0-9.]+)\\s*(km|m)\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher matcher = pattern.matcher(allText.toString());
+        java.util.List<Float> distances = new java.util.ArrayList<>();
         
+        while (matcher.find()) {
+            try {
+                float val = Float.parseFloat(matcher.group(1));
+                if (matcher.group(2).toLowerCase(Locale.ROOT).equals("m")) {
+                    val = val / 1000f; // Convert meters to km
+                }
+                distances.add(val);
+            } catch (Exception ignored) {}
+        }
+
+        // Deduplicate consecutive exact same distances (common when text matches content-desc)
+        java.util.List<Float> uniqueDistances = new java.util.ArrayList<>();
+        for (float d : distances) {
+            if (uniqueDistances.isEmpty() || uniqueDistances.get(uniqueDistances.size() - 1) != d) {
+                uniqueDistances.add(d);
+            }
+        }
+
         android.os.Handler uiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-        uiHandler.post(() -> android.widget.Toast.makeText(this, "Accept Assist: Button found! Clicking...", android.widget.Toast.LENGTH_SHORT).show());
+
+        if (uniqueDistances.size() >= 2) {
+            float pickupKm = uniqueDistances.get(0);
+            float dropKm = uniqueDistances.get(1);
+
+            if (pickupKm < minPickup || pickupKm > maxPickup) {
+                uiHandler.post(() -> android.widget.Toast.makeText(this, "Ignored: Pickup " + pickupKm + "km out of bounds", android.widget.Toast.LENGTH_SHORT).show());
+                return;
+            }
+            if (dropKm < minDrop || dropKm > maxDrop) {
+                uiHandler.post(() -> android.widget.Toast.makeText(this, "Ignored: Drop " + dropKm + "km out of bounds", android.widget.Toast.LENGTH_SHORT).show());
+                return;
+            }
+        }
+
+        AccessibilityNodeInfo node = targetNode;
+        uiHandler.post(() -> android.widget.Toast.makeText(this, "Accept Assist: Distance valid! Clicking...", android.widget.Toast.LENGTH_SHORT).show());
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             Rect bounds = new Rect();
@@ -243,6 +283,19 @@ public class AcceptAccessibilityService extends AccessibilityService {
         }
         for (int i = 0; i < node.getChildCount(); i++) {
             collectMatches(node.getChild(i), targetText, matches);
+        }
+    }
+
+    private void collectAllText(AccessibilityNodeInfo node, StringBuilder sb) {
+        if (node == null) return;
+        if (node.getText() != null) {
+            sb.append(node.getText().toString()).append(" ");
+        }
+        if (node.getContentDescription() != null) {
+            sb.append(node.getContentDescription().toString()).append(" ");
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            collectAllText(node.getChild(i), sb);
         }
     }
 
