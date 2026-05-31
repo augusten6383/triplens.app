@@ -90,19 +90,17 @@ public class MainActivity extends Activity {
 
         boolean dbInitialized = prefs.getBoolean("db_initialized", false);
         if (!dbInitialized) {
-            Toast.makeText(this, "Initializing database...", Toast.LENGTH_SHORT).show();
+            setContentView(buildLoadingView("Connecting to remote database..."));
             TursoHelper.initDatabase(this, new TursoHelper.Callback() {
                 @Override
                 public void onSuccess(org.json.JSONArray rows) {
                     prefs.edit().putBoolean("db_initialized", true).apply();
-                    Toast.makeText(MainActivity.this, "Database Initialized!", Toast.LENGTH_SHORT).show();
                     proceedNavigation();
                 }
 
                 @Override
                 public void onError(String message) {
-                    Toast.makeText(MainActivity.this, "DB Initialization error: " + message, Toast.LENGTH_LONG).show();
-                    setContentView(buildDbConfigView());
+                    setContentView(buildErrorView("Failed to connect to database:\n" + message));
                 }
             });
         } else {
@@ -119,6 +117,74 @@ public class MainActivity extends Activity {
         } else {
             setContentView(buildLoginView());
         }
+    }
+
+    private View buildLoadingView(String message) {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER);
+        root.setPadding(dp(20), dp(20), dp(20), dp(20));
+        root.setBackgroundColor(Color.rgb(245, 247, 246));
+
+        TextView title = new TextView(this);
+        title.setText("Accept Assist");
+        title.setTextColor(Color.rgb(18, 23, 23));
+        title.setTextSize(30);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setGravity(Gravity.CENTER);
+        root.addView(title, matchWrap());
+
+        TextView desc = new TextView(this);
+        desc.setText(message);
+        desc.setTextColor(Color.rgb(81, 89, 88));
+        desc.setTextSize(15);
+        desc.setGravity(Gravity.CENTER);
+        desc.setPadding(0, dp(12), 0, dp(24));
+        root.addView(desc, matchWrap());
+
+        android.widget.ProgressBar progressBar = new android.widget.ProgressBar(this);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        params.gravity = Gravity.CENTER;
+        root.addView(progressBar, params);
+
+        return root;
+    }
+
+    private View buildErrorView(String errorMessage) {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER);
+        root.setPadding(dp(20), dp(20), dp(20), dp(20));
+        root.setBackgroundColor(Color.rgb(245, 247, 246));
+
+        TextView title = new TextView(this);
+        title.setText("Connection Error");
+        title.setTextColor(Color.rgb(200, 50, 50));
+        title.setTextSize(24);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setGravity(Gravity.CENTER);
+        root.addView(title, matchWrap());
+
+        TextView desc = new TextView(this);
+        desc.setText(errorMessage);
+        desc.setTextColor(Color.rgb(81, 89, 88));
+        desc.setTextSize(14);
+        desc.setGravity(Gravity.CENTER);
+        desc.setPadding(0, dp(12), 0, dp(24));
+        root.addView(desc, matchWrap());
+
+        Button retryBtn = primaryButton("Retry Connection");
+        retryBtn.setOnClickListener(v -> navigateToScreen());
+        root.addView(retryBtn, matchWrapWithTop(12));
+
+        Button configBtn = secondaryButton("Configure DB Settings");
+        configBtn.setOnClickListener(v -> setContentView(buildDbConfigView()));
+        root.addView(configBtn, matchWrapWithTop(12));
+
+        return root;
     }
 
     private View buildDbConfigView() {
