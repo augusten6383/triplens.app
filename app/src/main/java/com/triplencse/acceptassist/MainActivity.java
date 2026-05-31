@@ -88,6 +88,29 @@ public class MainActivity extends Activity {
             return;
         }
 
+        boolean dbInitialized = prefs.getBoolean("db_initialized", false);
+        if (!dbInitialized) {
+            Toast.makeText(this, "Initializing database...", Toast.LENGTH_SHORT).show();
+            TursoHelper.initDatabase(this, new TursoHelper.Callback() {
+                @Override
+                public void onSuccess(org.json.JSONArray rows) {
+                    prefs.edit().putBoolean("db_initialized", true).apply();
+                    Toast.makeText(MainActivity.this, "Database Initialized!", Toast.LENGTH_SHORT).show();
+                    proceedNavigation();
+                }
+
+                @Override
+                public void onError(String message) {
+                    Toast.makeText(MainActivity.this, "DB Initialization error: " + message, Toast.LENGTH_LONG).show();
+                    setContentView(buildDbConfigView());
+                }
+            });
+        } else {
+            proceedNavigation();
+        }
+    }
+
+    private void proceedNavigation() {
         String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "");
         if (!loggedInUser.isEmpty()) {
             setContentView(buildDashboardView());
@@ -150,6 +173,7 @@ public class MainActivity extends Activity {
             TursoHelper.initDatabase(this, new TursoHelper.Callback() {
                 @Override
                 public void onSuccess(org.json.JSONArray rows) {
+                    prefs.edit().putBoolean("db_initialized", true).apply();
                     Toast.makeText(MainActivity.this, "Database Initialized Successfully!", Toast.LENGTH_LONG).show();
                     navigateToScreen();
                 }
