@@ -92,6 +92,19 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return;
         }
 
+        // Subscription verification check
+        String status = prefs.getString(AcceptPrefs.KEY_USER_STATUS, "active");
+        int freeClicks = prefs.getInt(AcceptPrefs.KEY_FREE_CLICKS, 0);
+        long subExpires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
+
+        if ("blocked".equalsIgnoreCase(status)) {
+            return;
+        }
+        boolean isSubscribed = subExpires > (System.currentTimeMillis() / 1000L);
+        if (!isSubscribed && freeClicks <= 0) {
+            return;
+        }
+
         String packageName = event.getPackageName().toString();
         String appMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
         String targetPackage = "com.rapido.rider";
@@ -251,6 +264,37 @@ public class AcceptAccessibilityService extends AccessibilityService {
 
         if (targetNode == null) {
             return;
+        }
+
+        // Perform status / subscription checks right before the click is made
+        String status = prefs.getString(AcceptPrefs.KEY_USER_STATUS, "active");
+        int freeClicks = prefs.getInt(AcceptPrefs.KEY_FREE_CLICKS, 0);
+        long subExpires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
+
+        if ("blocked".equalsIgnoreCase(status)) {
+            uiHandler.post(() -> android.widget.Toast.makeText(this, "Click blocked: Account blocked by administrator", android.widget.Toast.LENGTH_LONG).show());
+            return;
+        }
+
+        boolean isSubscribed = subExpires > (System.currentTimeMillis() / 1000L);
+        if (!isSubscribed && freeClicks <= 0) {
+            uiHandler.post(() -> android.widget.Toast.makeText(this, "Click blocked: Subscription required", android.widget.Toast.LENGTH_LONG).show());
+            return;
+        }
+
+        if (!isSubscribed && freeClicks > 0) {
+            // Decrement local free clicks
+            int newClicks = freeClicks - 1;
+            prefs.edit().putInt(AcceptPrefs.KEY_FREE_CLICKS, newClicks).apply();
+
+            // Notify server in the background
+            String username = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "");
+            if (!username.isEmpty()) {
+                TursoHelper.useFreeClick(this, username, new TursoHelper.Callback() {
+                    @Override public void onSuccess(org.json.JSONArray rows) {}
+                    @Override public void onError(String message) {}
+                });
+            }
         }
 
         AccessibilityNodeInfo node = targetNode;

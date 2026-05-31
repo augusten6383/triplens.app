@@ -221,6 +221,21 @@ public final class TursoHelper {
         });
     }
 
+    public static void runMigration(Context ctx) {
+        executePipeline(ctx, "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active';", new ArrayList<>(), new Callback() {
+            @Override public void onSuccess(JSONArray rows) {}
+            @Override public void onError(String message) {}
+        });
+        executePipeline(ctx, "ALTER TABLE users ADD COLUMN free_clicks_remaining INTEGER DEFAULT 1;", new ArrayList<>(), new Callback() {
+            @Override public void onSuccess(JSONArray rows) {}
+            @Override public void onError(String message) {}
+        });
+        executePipeline(ctx, "ALTER TABLE users ADD COLUMN subscription_expires_at INTEGER DEFAULT 0;", new ArrayList<>(), new Callback() {
+            @Override public void onSuccess(JSONArray rows) {}
+            @Override public void onError(String message) {}
+        });
+    }
+
     public static void initDatabase(Context ctx, Callback callback) {
         String sql = "CREATE TABLE IF NOT EXISTS users (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -229,13 +244,27 @@ public final class TursoHelper {
                 "phone TEXT UNIQUE, " +
                 "password TEXT, " +
                 "recovery_question TEXT, " +
-                "recovery_answer TEXT" +
+                "recovery_answer TEXT, " +
+                "status TEXT DEFAULT 'active', " +
+                "free_clicks_remaining INTEGER DEFAULT 1, " +
+                "subscription_expires_at INTEGER DEFAULT 0" +
                 ");";
-        executePipeline(ctx, sql, new ArrayList<>(), callback);
+        executePipeline(ctx, sql, new ArrayList<>(), new Callback() {
+            @Override
+            public void onSuccess(JSONArray rows) {
+                runMigration(ctx);
+                callback.onSuccess(rows);
+            }
+
+            @Override
+            public void onError(String message) {
+                callback.onError(message);
+            }
+        });
     }
 
     public static void signUpUser(Context ctx, String username, String email, String phone, String password, String question, String answer, Callback callback) {
-        String sql = "INSERT INTO users (username, email, phone, password, recovery_question, recovery_answer) VALUES (?, ?, ?, ?, ?, ?);";
+        String sql = "INSERT INTO users (username, email, phone, password, recovery_question, recovery_answer, status, free_clicks_remaining, subscription_expires_at) VALUES (?, ?, ?, ?, ?, ?, 'active', 1, 0);";
         List<Object> args = new ArrayList<>();
         args.add(username.trim().toLowerCase());
         args.add(email.trim().toLowerCase());
@@ -324,5 +353,29 @@ public final class TursoHelper {
                 callback.onError(message);
             }
         });
+    }
+
+    public static void checkUserSubscription(Context ctx, String username, Callback callback) {
+        String sql = "SELECT status, free_clicks_remaining, subscription_expires_at FROM users WHERE username = ?;";
+        List<Object> args = new ArrayList<>();
+        args.add(username.trim().toLowerCase());
+        executePipeline(ctx, sql, args, callback);
+    }
+
+    public static void useFreeClick(Context ctx, String username, Callback callback) {
+        String sql = "UPDATE users SET free_clicks_remaining = free_clicks_remaining - 1 WHERE username = ? AND free_clicks_remaining > 0;";
+        List<Object> args = new ArrayList<>();
+        args.add(username.trim().toLowerCase());
+        executePipeline(ctx, sql, args, callback);
+    }
+
+    public static void demoActivateSubscription(Context ctx, String username, int days, Callback callback) {
+        long nowSeconds = System.currentTimeMillis() / 1000L;
+        long addedSeconds = (long) days * 24 * 60 * 60;
+        String sql = "UPDATE users SET subscription_expires_at = ? WHERE username = ?;";
+        List<Object> args = new ArrayList<>();
+        args.add(nowSeconds + addedSeconds);
+        args.add(username.trim().toLowerCase());
+        executePipeline(ctx, sql, args, callback);
     }
 }

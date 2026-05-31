@@ -53,8 +53,7 @@ public class MainActivity extends Activity {
         super.onResume();
         String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "");
         if (!loggedInUser.isEmpty()) {
-            checkPermissionsOnLaunch();
-            refreshStatus();
+            proceedNavigation();
         }
     }
 
@@ -111,11 +110,68 @@ public class MainActivity extends Activity {
     private void proceedNavigation() {
         String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "");
         if (!loggedInUser.isEmpty()) {
+            setContentView(buildLoadingView("Checking subscription status..."));
+            TursoHelper.checkUserSubscription(this, loggedInUser, new TursoHelper.Callback() {
+                @Override
+                public void onSuccess(org.json.JSONArray rows) {
+                    if (rows != null && rows.length() > 0) {
+                        try {
+                            org.json.JSONArray firstRow = rows.getJSONArray(0);
+                            String status = TursoHelper.getValueAsString(firstRow.getJSONObject(0));
+                            String freeClicksStr = TursoHelper.getValueAsString(firstRow.getJSONObject(1));
+                            String subExpiresStr = TursoHelper.getValueAsString(firstRow.getJSONObject(2));
+
+                            if (status == null) status = "active";
+                            int freeClicks = 0;
+                            try {
+                                if (freeClicksStr != null) freeClicks = Integer.parseInt(freeClicksStr);
+                            } catch (NumberFormatException ignored) {}
+                            long subExpires = 0L;
+                            try {
+                                if (subExpiresStr != null) subExpires = Long.parseLong(subExpiresStr);
+                            } catch (NumberFormatException ignored) {}
+
+                            prefs.edit()
+                                    .putString(AcceptPrefs.KEY_USER_STATUS, status)
+                                    .putInt(AcceptPrefs.KEY_FREE_CLICKS, freeClicks)
+                                    .putLong(AcceptPrefs.KEY_SUB_EXPIRES, subExpires)
+                                    .apply();
+
+                            routeBasedOnSubscription(status, freeClicks, subExpires);
+                        } catch (Exception ex) {
+                            useCachedSubscriptionAndRoute();
+                        }
+                    } else {
+                        useCachedSubscriptionAndRoute();
+                    }
+                }
+
+                @Override
+                public void onError(String message) {
+                    useCachedSubscriptionAndRoute();
+                }
+            });
+        } else {
+            setContentView(buildLoginView());
+        }
+    }
+
+    private void useCachedSubscriptionAndRoute() {
+        String status = prefs.getString(AcceptPrefs.KEY_USER_STATUS, "active");
+        int freeClicks = prefs.getInt(AcceptPrefs.KEY_FREE_CLICKS, 1);
+        long subExpires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
+        routeBasedOnSubscription(status, freeClicks, subExpires);
+    }
+
+    private void routeBasedOnSubscription(String status, int freeClicks, long subExpires) {
+        if ("blocked".equalsIgnoreCase(status)) {
+            setContentView(buildBlockedView());
+        } else if (subExpires > System.currentTimeMillis() / 1000L || freeClicks > 0) {
             setContentView(buildDashboardView());
             checkPermissionsOnLaunch();
             refreshStatus();
         } else {
-            setContentView(buildLoginView());
+            setContentView(buildSubscriptionView());
         }
     }
 
@@ -590,6 +646,27 @@ public class MainActivity extends Activity {
         userSessionText.setPadding(0, dp(4), 0, dp(4));
         root.addView(userSessionText, matchWrap());
 
+        long subExpires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
+        int freeClicks = prefs.getInt(AcceptPrefs.KEY_FREE_CLICKS, 0);
+        boolean isSubscribed = subExpires > (System.currentTimeMillis() / 1000L);
+
+        TextView subStatusIndicator = new TextView(this);
+        subStatusIndicator.setTextSize(14);
+        subStatusIndicator.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        subStatusIndicator.setPadding(0, dp(2), 0, dp(8));
+
+        if (isSubscribed) {
+            subStatusIndicator.setText("Subscription: Active (Expires: " + formatExpiry(subExpires) + ")");
+            subStatusIndicator.setTextColor(Color.rgb(0, 120, 80));
+        } else if (freeClicks > 0) {
+            subStatusIndicator.setText("Subscription: Trial (" + freeClicks + " Free Click" + (freeClicks > 1 ? "s" : "") + " remaining)");
+            subStatusIndicator.setTextColor(Color.rgb(180, 100, 0));
+        } else {
+            subStatusIndicator.setText("Subscription: Expired");
+            subStatusIndicator.setTextColor(Color.rgb(200, 50, 50));
+        }
+        root.addView(subStatusIndicator, matchWrap());
+
         Button logoutBtn = secondaryButton("Log Out");
         logoutBtn.setOnClickListener(v -> {
             prefs.edit().putString(AcceptPrefs.KEY_LOGGED_IN_USER, "").apply();
@@ -828,5 +905,178 @@ public class MainActivity extends Activity {
 
     private int dp(int value) {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    private String formatExpiry(long timestampSec) {
+        if (timestampSec <= 0) return "No active subscription";
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault());
+        return sdf.format(new java.util.Date(timestampSec * 1000L));
+    }
+
+    private View buildBlockedView() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER);
+        root.setPadding(dp(24), dp(24), dp(24), dp(24));
+        root.setBackgroundColor(Color.rgb(245, 247, 246));
+
+        TextView title = new TextView(this);
+        title.setText("Account Blocked");
+        title.setTextColor(Color.rgb(200, 50, 50));
+        title.setTextSize(28);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setGravity(Gravity.CENTER);
+        root.addView(title, matchWrap());
+
+        TextView desc = new TextView(this);
+        desc.setText("Your account has been suspended or blocked by the administrator. Please contact support if you believe this is a mistake.");
+        desc.setTextColor(Color.rgb(81, 89, 88));
+        desc.setTextSize(16);
+        desc.setGravity(Gravity.CENTER);
+        desc.setPadding(0, dp(16), 0, dp(32));
+        root.addView(desc, matchWrap());
+
+        Button logoutBtn = primaryButton("Log Out");
+        logoutBtn.setOnClickListener(v -> {
+            prefs.edit().putString(AcceptPrefs.KEY_LOGGED_IN_USER, "").apply();
+            navigateToScreen();
+        });
+        root.addView(logoutBtn, matchWrap());
+
+        return root;
+    }
+
+    private View buildSubscriptionView() {
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(20), dp(24), dp(20), dp(24));
+        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        scrollView.addView(root);
+
+        TextView title = new TextView(this);
+        title.setText("Premium Required");
+        title.setTextColor(Color.rgb(18, 23, 23));
+        title.setTextSize(28);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setGravity(Gravity.CENTER);
+        root.addView(title, matchWrap());
+
+        String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "User");
+        TextView userSessionText = new TextView(this);
+        userSessionText.setText("Logged in as: " + loggedInUser);
+        userSessionText.setTextColor(Color.rgb(0, 106, 86));
+        userSessionText.setTextSize(14);
+        userSessionText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        userSessionText.setGravity(Gravity.CENTER);
+        userSessionText.setPadding(0, dp(4), 0, dp(12));
+        root.addView(userSessionText, matchWrap());
+
+        int freeClicks = prefs.getInt(AcceptPrefs.KEY_FREE_CLICKS, 0);
+        TextView trialStatusText = new TextView(this);
+        if (freeClicks > 0) {
+            trialStatusText.setText("Trial status: " + freeClicks + " free click" + (freeClicks > 1 ? "s" : "") + " remaining");
+            trialStatusText.setTextColor(Color.rgb(0, 106, 86));
+        } else {
+            trialStatusText.setText("Trial status: Free clicks exhausted");
+            trialStatusText.setTextColor(Color.rgb(200, 50, 50));
+        }
+        trialStatusText.setTextSize(15);
+        trialStatusText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        trialStatusText.setGravity(Gravity.CENTER);
+        trialStatusText.setPadding(0, dp(6), 0, dp(20));
+        root.addView(trialStatusText, matchWrap());
+
+        // Plans Section
+        TextView plansHeader = label("Available Subscription Plans");
+        plansHeader.setGravity(Gravity.CENTER);
+        root.addView(plansHeader, matchWrap());
+
+        // Card 1: 20 / Day
+        root.addView(buildPlanCard("Day Pass", "₹20 / day", "Great for quick trials or temporary usage"), matchWrapWithTop(10));
+        
+        // Card 2: 99 / Week
+        root.addView(buildPlanCard("Week Pass", "₹99 / week", "Perfect for regular weekly work schedules"), matchWrapWithTop(10));
+        
+        // Card 3: 299 / Month
+        root.addView(buildPlanCard("Month Pass", "₹299 / month", "Best value. Unrestricted access for a full month"), matchWrapWithTop(10));
+
+        // Demo Activation Button
+        Button demoBtn = new Button(this);
+        demoBtn.setText("Demo: Activate Trial (Add 1 Day Premium)");
+        demoBtn.setBackgroundColor(Color.rgb(0, 106, 86));
+        demoBtn.setTextColor(Color.WHITE);
+        demoBtn.setAllCaps(false);
+        demoBtn.setOnClickListener(v -> {
+            Toast.makeText(this, "Activating 1-day demo subscription...", Toast.LENGTH_SHORT).show();
+            TursoHelper.demoActivateSubscription(this, loggedInUser, 1, new TursoHelper.Callback() {
+                @Override
+                public void onSuccess(org.json.JSONArray rows) {
+                    Toast.makeText(MainActivity.this, "Demo subscription activated successfully!", Toast.LENGTH_LONG).show();
+                    proceedNavigation();
+                }
+
+                @Override
+                public void onError(String message) {
+                    Toast.makeText(MainActivity.this, "Failed to activate demo: " + message, Toast.LENGTH_LONG).show();
+                }
+            });
+        });
+        root.addView(demoBtn, matchWrapWithTop(28));
+
+        Button logoutBtn = secondaryButton("Log Out");
+        logoutBtn.setOnClickListener(v -> {
+            prefs.edit().putString(AcceptPrefs.KEY_LOGGED_IN_USER, "").apply();
+            navigateToScreen();
+        });
+        root.addView(logoutBtn, matchWrapWithTop(12));
+
+        return scrollView;
+    }
+
+    private View buildPlanCard(String name, String price, String desc) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(16), dp(12), dp(16), dp(12));
+        card.setBackgroundColor(Color.WHITE);
+        
+        TextView nameTxt = new TextView(this);
+        nameTxt.setText(name);
+        nameTxt.setTextSize(16);
+        nameTxt.setTextColor(Color.rgb(18, 23, 23));
+        nameTxt.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        
+        TextView priceTxt = new TextView(this);
+        priceTxt.setText(price);
+        priceTxt.setTextSize(18);
+        priceTxt.setTextColor(Color.rgb(0, 106, 86));
+        priceTxt.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+
+        TextView descTxt = new TextView(this);
+        descTxt.setText(desc);
+        descTxt.setTextSize(13);
+        descTxt.setTextColor(Color.rgb(120, 120, 120));
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        
+        LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        header.addView(nameTxt, nameParams);
+        header.addView(priceTxt);
+
+        card.addView(header, matchWrap());
+        card.addView(descTxt, matchWrapWithTop(4));
+
+        card.setOnClickListener(v -> {
+            new AlertDialog.Builder(this)
+                .setTitle("Select " + name)
+                .setMessage("In a production release, this would securely redirect to your Payment Gateway interface. For testing, please use the 'Demo: Activate Trial' button or the admin CLI tool.")
+                .setPositiveButton("OK", null)
+                .show();
+        });
+
+        return card;
     }
 }

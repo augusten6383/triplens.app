@@ -16,6 +16,9 @@ final class AcceptPrefs {
     static final String KEY_TURSO_URL = "turso_url";
     static final String KEY_TURSO_TOKEN = "turso_token";
     static final String KEY_LOGGED_IN_USER = "logged_in_user";
+    static final String KEY_USER_STATUS = "user_status";
+    static final String KEY_FREE_CLICKS = "free_clicks";
+    static final String KEY_SUB_EXPIRES = "sub_expires";
 
     private AcceptPrefs() {
     }
@@ -42,6 +45,9 @@ final class AcceptPrefs {
                     .putString(KEY_TURSO_URL, "https://accept-assist-augusten6383.aws-ap-south-1.turso.io")
                     .putString(KEY_TURSO_TOKEN, "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODAyNTc1ODEsImlkIjoiMDE5ZTdmOWUtYjEwMS03MjMwLThjYWQtNTRmZjllNmI3ZWU4IiwicmlkIjoiYTEzZDg3YmYtOTdkOS00NjMwLWJkMGYtMjNjN2FkMWJhZmNjIn0.i4RsyjzDOZenpkfXj7HcCK8DCuE3usirajqfaAV3uxuKYfNK2GtzO6n9QBuq0SDwof9azXIQH68c535mM7_YDw")
                     .putString(KEY_LOGGED_IN_USER, "")
+                    .putString(KEY_USER_STATUS, "active")
+                    .putInt(KEY_FREE_CLICKS, 1)
+                    .putLong(KEY_SUB_EXPIRES, 0L)
                     .apply();
         }
     }
