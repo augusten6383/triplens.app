@@ -13,6 +13,9 @@ final class AcceptPrefs {
     static final String KEY_APP_MODE = "app_mode";
     static final String KEY_CUSTOM_PACKAGE = "custom_package";
     static final String KEY_CUSTOM_TARGET_TEXT = "custom_target_text";
+    static final String KEY_TURSO_URL = "turso_url";
+    static final String KEY_TURSO_TOKEN = "turso_token";
+    static final String KEY_LOGGED_IN_USER = "logged_in_user";
 
     private AcceptPrefs() {
     }
@@ -32,6 +35,13 @@ final class AcceptPrefs {
                     .putString(KEY_APP_MODE, "rapido")
                     .putString(KEY_CUSTOM_PACKAGE, "")
                     .putString(KEY_CUSTOM_TARGET_TEXT, "Accept")
+                    .apply();
+        }
+        if (!prefs.contains(KEY_TURSO_URL) || prefs.getString(KEY_TURSO_URL, "").isEmpty()) {
+            prefs.edit()
+                    .putString(KEY_TURSO_URL, "https://accept-assist-augusten6383.aws-ap-south-1.turso.io")
+                    .putString(KEY_TURSO_TOKEN, "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODAyNTc1ODEsImlkIjoiMDE5ZTdmOWUtYjEwMS03MjMwLThjYWQtNTRmZjllNmI3ZWU4IiwicmlkIjoiYTEzZDg3YmYtOTdkOS00NjMwLWJkMGYtMjNjN2FkMWJhZmNjIn0.i4RsyjzDOZenpkfXj7HcCK8DCuE3usirajqfaAV3uxuKYfNK2GtzO6n9QBuq0SDwof9azXIQH68c535mM7_YDw")
+                    .putString(KEY_LOGGED_IN_USER, "")
                     .apply();
         }
     }

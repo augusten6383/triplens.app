@@ -45,14 +45,17 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences(AcceptPrefs.NAME, MODE_PRIVATE);
         AcceptPrefs.ensureDefaults(prefs);
-        setContentView(buildContent());
+        navigateToScreen();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        checkPermissionsOnLaunch();
-        refreshStatus();
+        String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "");
+        if (!loggedInUser.isEmpty()) {
+            checkPermissionsOnLaunch();
+            refreshStatus();
+        }
     }
 
     private void checkPermissionsOnLaunch() {
@@ -77,7 +80,405 @@ public class MainActivity extends Activity {
         }
     }
 
-    private View buildContent() {
+    private void navigateToScreen() {
+        String url = prefs.getString(AcceptPrefs.KEY_TURSO_URL, "");
+        String token = prefs.getString(AcceptPrefs.KEY_TURSO_TOKEN, "");
+        if (url.isEmpty() || token.isEmpty()) {
+            setContentView(buildDbConfigView());
+            return;
+        }
+
+        String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "");
+        if (!loggedInUser.isEmpty()) {
+            setContentView(buildDashboardView());
+            checkPermissionsOnLaunch();
+            refreshStatus();
+        } else {
+            setContentView(buildLoginView());
+        }
+    }
+
+    private View buildDbConfigView() {
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(20), dp(30), dp(20), dp(30));
+        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        scrollView.addView(root);
+
+        TextView title = new TextView(this);
+        title.setText("Database Configuration");
+        title.setTextColor(Color.rgb(18, 23, 23));
+        title.setTextSize(26);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        root.addView(title, matchWrap());
+
+        TextView desc = new TextView(this);
+        desc.setText("Connect Accept Assist to your remote Turso / libSQL database.");
+        desc.setTextColor(Color.rgb(81, 89, 88));
+        desc.setTextSize(14);
+        desc.setPadding(0, dp(6), 0, dp(24));
+        root.addView(desc, matchWrap());
+
+        root.addView(label("Database HTTP / libsql URL"), matchWrap());
+        EditText urlInput = input(prefs.getString(AcceptPrefs.KEY_TURSO_URL, ""));
+        urlInput.setHint("libsql://your-db-org.turso.io");
+        root.addView(urlInput, matchWrapWithTop(6));
+
+        root.addView(label("Bearer Access Token"), matchWrapWithTop(16));
+        EditText tokenInput = input(prefs.getString(AcceptPrefs.KEY_TURSO_TOKEN, ""));
+        tokenInput.setHint("ey...");
+        tokenInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        root.addView(tokenInput, matchWrapWithTop(6));
+
+        Button connectBtn = primaryButton("Save & Initialize Database");
+        connectBtn.setOnClickListener(v -> {
+            String url = urlInput.getText().toString().trim();
+            String token = tokenInput.getText().toString().trim();
+            if (url.isEmpty() || token.isEmpty()) {
+                Toast.makeText(this, "Please enter both URL and Token", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            prefs.edit()
+                    .putString(AcceptPrefs.KEY_TURSO_URL, url)
+                    .putString(AcceptPrefs.KEY_TURSO_TOKEN, token)
+                    .apply();
+
+            Toast.makeText(this, "Connecting to Turso...", Toast.LENGTH_SHORT).show();
+            TursoHelper.initDatabase(this, new TursoHelper.Callback() {
+                @Override
+                public void onSuccess(org.json.JSONArray rows) {
+                    Toast.makeText(MainActivity.this, "Database Initialized Successfully!", Toast.LENGTH_LONG).show();
+                    navigateToScreen();
+                }
+
+                @Override
+                public void onError(String message) {
+                    Toast.makeText(MainActivity.this, "Connection failed: " + message, Toast.LENGTH_LONG).show();
+                }
+            });
+        });
+        root.addView(connectBtn, matchWrapWithTop(24));
+
+        return scrollView;
+    }
+
+    private View buildLoginView() {
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(20), dp(35), dp(20), dp(35));
+        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        scrollView.addView(root);
+
+        TextView title = new TextView(this);
+        title.setText("Accept Assist");
+        title.setTextColor(Color.rgb(18, 23, 23));
+        title.setTextSize(30);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setGravity(Gravity.CENTER);
+        root.addView(title, matchWrap());
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Enter credentials to access auto-clicker settings");
+        subtitle.setTextColor(Color.rgb(81, 89, 88));
+        subtitle.setTextSize(14);
+        subtitle.setGravity(Gravity.CENTER);
+        subtitle.setPadding(0, dp(4), 0, dp(30));
+        root.addView(subtitle, matchWrap());
+
+        root.addView(label("Username or Email"), matchWrap());
+        EditText loginInput = input("");
+        loginInput.setHint("Enter username or email");
+        root.addView(loginInput, matchWrapWithTop(6));
+
+        root.addView(label("Password"), matchWrapWithTop(16));
+        EditText passInput = input("");
+        passInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        passInput.setHint("••••••••");
+        root.addView(passInput, matchWrapWithTop(6));
+
+        Button loginBtn = primaryButton("Log In");
+        loginBtn.setOnClickListener(v -> {
+            String user = loginInput.getText().toString().trim();
+            String pass = passInput.getText().toString();
+            if (user.isEmpty() || pass.isEmpty()) {
+                Toast.makeText(this, "Please enter your username and password", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            Toast.makeText(this, "Logging in...", Toast.LENGTH_SHORT).show();
+            TursoHelper.loginUser(this, user, pass, new TursoHelper.Callback() {
+                @Override
+                public void onSuccess(org.json.JSONArray rows) {
+                    try {
+                        org.json.JSONArray firstRow = rows.getJSONArray(0);
+                        String username = TursoHelper.getValueAsString(firstRow.getJSONObject(0));
+                        prefs.edit().putString(AcceptPrefs.KEY_LOGGED_IN_USER, username).apply();
+                        Toast.makeText(MainActivity.this, "Welcome " + username + "!", Toast.LENGTH_SHORT).show();
+                        navigateToScreen();
+                    } catch (Exception ex) {
+                        Toast.makeText(MainActivity.this, "Login error: " + ex.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                }
+
+                @Override
+                public void onError(String message) {
+                    Toast.makeText(MainActivity.this, "Login failed: " + message, Toast.LENGTH_LONG).show();
+                }
+            });
+        });
+        root.addView(loginBtn, matchWrapWithTop(24));
+
+        Button signUpLink = secondaryButton("Create New Account");
+        signUpLink.setOnClickListener(v -> setContentView(buildSignUpView()));
+        root.addView(signUpLink, matchWrapWithTop(12));
+
+        Button forgotLink = secondaryButton("Forgot Password?");
+        forgotLink.setOnClickListener(v -> setContentView(buildRecoveryView()));
+        root.addView(forgotLink, matchWrapWithTop(6));
+
+        Button dbSettingsBtn = secondaryButton("Database Connection Settings");
+        dbSettingsBtn.setOnClickListener(v -> setContentView(buildDbConfigView()));
+        root.addView(dbSettingsBtn, matchWrapWithTop(30));
+
+        return scrollView;
+    }
+
+    private View buildSignUpView() {
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(20), dp(25), dp(20), dp(25));
+        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        scrollView.addView(root);
+
+        TextView title = new TextView(this);
+        title.setText("Create Account");
+        title.setTextColor(Color.rgb(18, 23, 23));
+        title.setTextSize(26);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        root.addView(title, matchWrap());
+
+        TextView desc = new TextView(this);
+        desc.setText("Please register with unique details to continue");
+        desc.setTextColor(Color.rgb(81, 89, 88));
+        desc.setTextSize(14);
+        desc.setPadding(0, dp(4), 0, dp(20));
+        root.addView(desc, matchWrap());
+
+        root.addView(label("Username"), matchWrap());
+        EditText userEdit = input("");
+        root.addView(userEdit, matchWrapWithTop(6));
+
+        root.addView(label("Email Address"), matchWrapWithTop(14));
+        EditText emailEdit = input("");
+        emailEdit.setInputType(InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        root.addView(emailEdit, matchWrapWithTop(6));
+
+        root.addView(label("Phone Number"), matchWrapWithTop(14));
+        EditText phoneEdit = input("");
+        phoneEdit.setInputType(InputType.TYPE_CLASS_PHONE);
+        root.addView(phoneEdit, matchWrapWithTop(6));
+
+        root.addView(label("Password"), matchWrapWithTop(14));
+        EditText passEdit = input("");
+        passEdit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        root.addView(passEdit, matchWrapWithTop(6));
+
+        root.addView(label("Security Question"), matchWrapWithTop(14));
+        EditText questionEdit = input("");
+        questionEdit.setHint("e.g. What is your pet's name?");
+        root.addView(questionEdit, matchWrapWithTop(6));
+
+        root.addView(label("Answer to Security Question"), matchWrapWithTop(14));
+        EditText answerEdit = input("");
+        answerEdit.setHint("Answer is case-insensitive");
+        root.addView(answerEdit, matchWrapWithTop(6));
+
+        Button registerBtn = primaryButton("Register Account");
+        registerBtn.setOnClickListener(v -> {
+            String user = userEdit.getText().toString().trim();
+            String email = emailEdit.getText().toString().trim();
+            String phone = phoneEdit.getText().toString().trim();
+            String pass = passEdit.getText().toString();
+            String question = questionEdit.getText().toString().trim();
+            String answer = answerEdit.getText().toString().trim();
+
+            if (user.isEmpty() || email.isEmpty() || phone.isEmpty() || pass.isEmpty() || question.isEmpty() || answer.isEmpty()) {
+                Toast.makeText(this, "All fields are required", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            Toast.makeText(this, "Creating account...", Toast.LENGTH_SHORT).show();
+            TursoHelper.signUpUser(this, user, email, phone, pass, question, answer, new TursoHelper.Callback() {
+                @Override
+                public void onSuccess(org.json.JSONArray rows) {
+                    Toast.makeText(MainActivity.this, "Registration successful! Please log in.", Toast.LENGTH_LONG).show();
+                    setContentView(buildLoginView());
+                }
+
+                @Override
+                public void onError(String message) {
+                    String userFriendlyMessage = message;
+                    if (message.contains("UNIQUE constraint failed")) {
+                        if (message.contains("users.username")) {
+                            userFriendlyMessage = "Username is already registered";
+                        } else if (message.contains("users.email")) {
+                            userFriendlyMessage = "Email address is already registered";
+                        } else if (message.contains("users.phone")) {
+                            userFriendlyMessage = "Phone number is already registered";
+                        } else {
+                            userFriendlyMessage = "Details must be unique. One of your inputs is already taken.";
+                        }
+                    }
+                    Toast.makeText(MainActivity.this, "Sign Up Failed: " + userFriendlyMessage, Toast.LENGTH_LONG).show();
+                }
+            });
+        });
+        root.addView(registerBtn, matchWrapWithTop(24));
+
+        Button backBtn = secondaryButton("Back to Log In");
+        backBtn.setOnClickListener(v -> setContentView(buildLoginView()));
+        root.addView(backBtn, matchWrapWithTop(12));
+
+        return scrollView;
+    }
+
+    private View buildRecoveryView() {
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(20), dp(30), dp(20), dp(30));
+        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        scrollView.addView(root);
+
+        TextView title = new TextView(this);
+        title.setText("Recover Password");
+        title.setTextColor(Color.rgb(18, 23, 23));
+        title.setTextSize(26);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        root.addView(title, matchWrap());
+
+        TextView desc = new TextView(this);
+        desc.setText("Verify your details to reset your password");
+        desc.setTextColor(Color.rgb(81, 89, 88));
+        desc.setTextSize(14);
+        desc.setPadding(0, dp(4), 0, dp(20));
+        root.addView(desc, matchWrap());
+
+        root.addView(label("Username or Email"), matchWrap());
+        EditText searchInput = input("");
+        searchInput.setHint("Enter registered username or email");
+        root.addView(searchInput, matchWrapWithTop(6));
+
+        LinearLayout step2Container = new LinearLayout(this);
+        step2Container.setOrientation(LinearLayout.VERTICAL);
+        step2Container.setVisibility(View.GONE);
+
+        TextView questionText = new TextView(this);
+        questionText.setTextSize(15);
+        questionText.setTextColor(Color.rgb(0, 106, 86));
+        questionText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        
+        step2Container.addView(label("Your Security Question:"), matchWrapWithTop(16));
+        step2Container.addView(questionText, matchWrapWithTop(6));
+
+        step2Container.addView(label("Security Answer"), matchWrapWithTop(16));
+        EditText answerInput = input("");
+        answerInput.setHint("Enter security question answer");
+        step2Container.addView(answerInput, matchWrapWithTop(6));
+
+        step2Container.addView(label("New Password"), matchWrapWithTop(16));
+        EditText newPassInput = input("");
+        newPassInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        newPassInput.setHint("••••••••");
+        step2Container.addView(newPassInput, matchWrapWithTop(6));
+
+        root.addView(step2Container, matchWrap());
+
+        Button step1Btn = primaryButton("Fetch Security Question");
+        step1Btn.setOnClickListener(v -> {
+            String userStr = searchInput.getText().toString().trim();
+            if (userStr.isEmpty()) {
+                Toast.makeText(this, "Please enter your username or email", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            Toast.makeText(this, "Fetching question...", Toast.LENGTH_SHORT).show();
+            TursoHelper.getRecoveryQuestion(this, userStr, new TursoHelper.Callback() {
+                @Override
+                public void onSuccess(org.json.JSONArray rows) {
+                    if (rows == null || rows.length() == 0) {
+                        Toast.makeText(MainActivity.this, "User not found", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    try {
+                        org.json.JSONArray firstRow = rows.getJSONArray(0);
+                        String question = TursoHelper.getValueAsString(firstRow.getJSONObject(0));
+                        if (question == null || question.trim().isEmpty()) {
+                            Toast.makeText(MainActivity.this, "This user does not have a security question configured.", Toast.LENGTH_LONG).show();
+                        } else {
+                            questionText.setText(question);
+                            step2Container.setVisibility(View.VISIBLE);
+                            step1Btn.setVisibility(View.GONE);
+                            searchInput.setEnabled(false);
+                        }
+                    } catch (Exception ex) {
+                        Toast.makeText(MainActivity.this, "Error: " + ex.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                }
+
+                @Override
+                public void onError(String message) {
+                    Toast.makeText(MainActivity.this, "Error fetching details: " + message, Toast.LENGTH_LONG).show();
+                }
+            });
+        });
+        root.addView(step1Btn, matchWrapWithTop(20));
+
+        Button resetBtn = primaryButton("Reset Password");
+        resetBtn.setOnClickListener(v -> {
+            String userStr = searchInput.getText().toString().trim();
+            String answer = answerInput.getText().toString().trim();
+            String newPass = newPassInput.getText().toString();
+
+            if (answer.isEmpty() || newPass.isEmpty()) {
+                Toast.makeText(this, "Please fill in all recovery fields", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            Toast.makeText(this, "Resetting password...", Toast.LENGTH_SHORT).show();
+            TursoHelper.resetPassword(this, userStr, answer, newPass, new TursoHelper.Callback() {
+                @Override
+                public void onSuccess(org.json.JSONArray rows) {
+                    Toast.makeText(MainActivity.this, "Password reset successfully! Please log in.", Toast.LENGTH_LONG).show();
+                    setContentView(buildLoginView());
+                }
+
+                @Override
+                public void onError(String message) {
+                    Toast.makeText(MainActivity.this, "Reset failed: " + message, Toast.LENGTH_LONG).show();
+                }
+            });
+        });
+        step2Container.addView(resetBtn, matchWrapWithTop(24));
+
+        Button backBtn = secondaryButton("Back to Log In");
+        backBtn.setOnClickListener(v -> setContentView(buildLoginView()));
+        root.addView(backBtn, matchWrapWithTop(12));
+
+        return scrollView;
+    }
+
+    private View buildDashboardView() {
         ScrollView scrollView = new ScrollView(this);
         scrollView.setFillViewport(true);
 
@@ -94,11 +495,28 @@ public class MainActivity extends Activity {
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         root.addView(title, matchWrap());
 
+        String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "User");
+        TextView userSessionText = new TextView(this);
+        userSessionText.setText("Logged in as: " + loggedInUser);
+        userSessionText.setTextColor(Color.rgb(0, 106, 86));
+        userSessionText.setTextSize(14);
+        userSessionText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        userSessionText.setPadding(0, dp(4), 0, dp(4));
+        root.addView(userSessionText, matchWrap());
+
+        Button logoutBtn = secondaryButton("Log Out");
+        logoutBtn.setOnClickListener(v -> {
+            prefs.edit().putString(AcceptPrefs.KEY_LOGGED_IN_USER, "").apply();
+            Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show();
+            navigateToScreen();
+        });
+        root.addView(logoutBtn, matchWrapWithTop(4));
+
         TextView subtitle = new TextView(this);
         subtitle.setText("Auto-clicks a matching button inside your configured custom app.");
         subtitle.setTextColor(Color.rgb(81, 89, 88));
         subtitle.setTextSize(15);
-        subtitle.setPadding(0, dp(6), 0, dp(18));
+        subtitle.setPadding(0, dp(6), 0, dp(14));
         root.addView(subtitle, matchWrap());
 
         serviceStatus = statusText();
@@ -125,7 +543,6 @@ public class MainActivity extends Activity {
         });
         root.addView(toggleServiceBtn, matchWrapWithTop(18));
 
-        // Add App Mode RadioGroup
         root.addView(label("Select App Mode"), matchWrapWithTop(18));
         
         appModeGroup = new RadioGroup(this);
@@ -150,7 +567,6 @@ public class MainActivity extends Activity {
             radioRapido.setChecked(true);
         }
 
-        // Distance Filters Container
         distanceFiltersContainer = new LinearLayout(this);
         distanceFiltersContainer.setOrientation(LinearLayout.VERTICAL);
 
@@ -176,7 +592,6 @@ public class MainActivity extends Activity {
 
         root.addView(distanceFiltersContainer, matchWrap());
 
-        // Custom App Container
         customAppContainer = new LinearLayout(this);
         customAppContainer.setOrientation(LinearLayout.VERTICAL);
 
@@ -194,7 +609,6 @@ public class MainActivity extends Activity {
 
         root.addView(customAppContainer, matchWrap());
 
-        // Setup visibility and toggles
         if ("custom".equals(currentMode)) {
             distanceFiltersContainer.setVisibility(View.GONE);
             customAppContainer.setVisibility(View.VISIBLE);
@@ -220,6 +634,10 @@ public class MainActivity extends Activity {
         Button save = primaryButton("Save settings");
         save.setOnClickListener(v -> saveSettings());
         root.addView(save, matchWrapWithTop(16));
+
+        Button dbSettingsBtn = secondaryButton("Database Configuration Settings");
+        dbSettingsBtn.setOnClickListener(v -> setContentView(buildDbConfigView()));
+        root.addView(dbSettingsBtn, matchWrapWithTop(12));
 
         TextView footer = new TextView(this);
         footer.setText("Auto-accepting for configured package. Distance limits are used only in default mode.");
