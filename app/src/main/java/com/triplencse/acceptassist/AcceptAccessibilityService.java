@@ -93,7 +93,15 @@ public class AcceptAccessibilityService extends AccessibilityService {
         }
 
         String packageName = event.getPackageName().toString();
+        String appMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
         String targetPackage = "com.rapido.rider";
+        if ("custom".equals(appMode)) {
+            targetPackage = prefs.getString(AcceptPrefs.KEY_CUSTOM_PACKAGE, "");
+        }
+
+        if (TextUtils.isEmpty(targetPackage)) {
+            return;
+        }
 
         boolean targetWindowFound = false;
         if (packageName.equals(targetPackage)) {
@@ -126,8 +134,9 @@ public class AcceptAccessibilityService extends AccessibilityService {
 
         // Remove any previously scheduled checks and reschedule for [delayMs] after the LATEST event
         handler.removeCallbacksAndMessages(null);
+        final String finalTargetPackage = targetPackage;
         handler.postDelayed(() -> {
-            clickIfMatched(targetPackage);
+            clickIfMatched(finalTargetPackage);
         }, delayMs);
     }
 
@@ -178,53 +187,59 @@ public class AcceptAccessibilityService extends AccessibilityService {
         android.os.Handler uiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
         AccessibilityNodeInfo targetNode = null;
 
-        for (AccessibilityNodeInfo button : allButtons) {
-            // Find the container card for this specific order by going up 5 levels
-            AccessibilityNodeInfo card = button;
-            for (int i = 0; i < 5; i++) {
-                if (card.getParent() != null) {
-                    card = card.getParent();
-                }
-            }
-
-            StringBuilder cardText = new StringBuilder();
-            collectAllText(card, cardText);
-
-            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("([0-9.]+)\\s*(km|m)\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
-            java.util.regex.Matcher matcher = pattern.matcher(cardText.toString());
-            java.util.List<Float> distances = new java.util.ArrayList<>();
-            
-            while (matcher.find()) {
-                try {
-                    float val = Float.parseFloat(matcher.group(1));
-                    if (matcher.group(2).toLowerCase(Locale.ROOT).equals("m")) {
-                        val = val / 1000f; // Convert meters to km
+        String appMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
+        if ("custom".equals(appMode)) {
+            // For custom app mode, bypass distance filters and accept the first found matching button
+            targetNode = allButtons.get(0);
+        } else {
+            for (AccessibilityNodeInfo button : allButtons) {
+                // Find the container card for this specific order by going up 5 levels
+                AccessibilityNodeInfo card = button;
+                for (int i = 0; i < 5; i++) {
+                    if (card.getParent() != null) {
+                        card = card.getParent();
                     }
-                    distances.add(val);
-                } catch (Exception ignored) {}
-            }
-
-            java.util.List<Float> uniqueDistances = new java.util.ArrayList<>();
-            for (float d : distances) {
-                if (uniqueDistances.isEmpty() || uniqueDistances.get(uniqueDistances.size() - 1) != d) {
-                    uniqueDistances.add(d);
                 }
-            }
 
-            if (uniqueDistances.size() >= 2) {
-                float pickupKm = uniqueDistances.get(0);
-                float dropKm = uniqueDistances.get(1);
+                StringBuilder cardText = new StringBuilder();
+                collectAllText(card, cardText);
 
-                if (pickupKm >= minPickup && pickupKm <= maxPickup && dropKm >= minDrop && dropKm <= maxDrop) {
-                    targetNode = button;
-                    break; // Found a valid order!
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("([0-9.]+)\\s*(km|m)\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
+                java.util.regex.Matcher matcher = pattern.matcher(cardText.toString());
+                java.util.List<Float> distances = new java.util.ArrayList<>();
+                
+                while (matcher.find()) {
+                    try {
+                        float val = Float.parseFloat(matcher.group(1));
+                        if (matcher.group(2).toLowerCase(Locale.ROOT).equals("m")) {
+                            val = val / 1000f; // Convert meters to km
+                        }
+                        distances.add(val);
+                    } catch (Exception ignored) {}
+                }
+
+                java.util.List<Float> uniqueDistances = new java.util.ArrayList<>();
+                for (float d : distances) {
+                    if (uniqueDistances.isEmpty() || uniqueDistances.get(uniqueDistances.size() - 1) != d) {
+                        uniqueDistances.add(d);
+                    }
+                }
+
+                if (uniqueDistances.size() >= 2) {
+                    float pickupKm = uniqueDistances.get(0);
+                    float dropKm = uniqueDistances.get(1);
+
+                    if (pickupKm >= minPickup && pickupKm <= maxPickup && dropKm >= minDrop && dropKm <= maxDrop) {
+                        targetNode = button;
+                        break; // Found a valid order!
+                    } else {
+                        uiHandler.post(() -> android.widget.Toast.makeText(this, "Ignored an order: Distances out of bounds", android.widget.Toast.LENGTH_SHORT).show());
+                    }
                 } else {
-                    uiHandler.post(() -> android.widget.Toast.makeText(this, "Ignored an order: Distances out of bounds", android.widget.Toast.LENGTH_SHORT).show());
+                    // If it can't find distances on the card, we accept it by default so we don't break
+                    targetNode = button;
+                    break;
                 }
-            } else {
-                // If it can't find distances on the card, we accept it by default so we don't break
-                targetNode = button;
-                break;
             }
         }
 

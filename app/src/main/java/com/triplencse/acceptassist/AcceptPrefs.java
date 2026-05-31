@@ -10,6 +10,8 @@ final class AcceptPrefs {
     static final String KEY_MIN_DROP = "min_drop";
     static final String KEY_MAX_DROP = "max_drop";
     static final String KEY_LAST_CLICK_MS = "last_click_ms";
+    static final String KEY_APP_MODE = "app_mode";
+    static final String KEY_CUSTOM_PACKAGE = "custom_package";
 
     private AcceptPrefs() {
     }
@@ -22,6 +24,12 @@ final class AcceptPrefs {
                     .putFloat(KEY_MAX_PICKUP, 5.0f)
                     .putFloat(KEY_MIN_DROP, 0.0f)
                     .putFloat(KEY_MAX_DROP, 15.0f)
+                    .apply();
+        }
+        if (!prefs.contains(KEY_APP_MODE)) {
+            prefs.edit()
+                    .putString(KEY_APP_MODE, "rapido")
+                    .putString(KEY_CUSTOM_PACKAGE, "")
                     .apply();
         }
     }

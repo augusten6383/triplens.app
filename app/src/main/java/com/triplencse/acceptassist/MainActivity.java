@@ -18,6 +18,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.RadioGroup;
+import android.widget.RadioButton;
 import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
@@ -30,6 +32,12 @@ public class MainActivity extends Activity {
     private EditText minDropInput;
     private EditText maxDropInput;
     private TextView serviceStatus;
+    private RadioGroup appModeGroup;
+    private RadioButton radioRapido;
+    private RadioButton radioCustom;
+    private EditText customPackageInput;
+    private LinearLayout distanceFiltersContainer;
+    private LinearLayout customAppContainer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -116,32 +124,98 @@ public class MainActivity extends Activity {
         });
         root.addView(toggleServiceBtn, matchWrapWithTop(18));
 
-        root.addView(label("Minimum Pickup Distance (km)"), matchWrapWithTop(14));
+        // Add App Mode RadioGroup
+        root.addView(label("Select App Mode"), matchWrapWithTop(18));
+        
+        appModeGroup = new RadioGroup(this);
+        appModeGroup.setOrientation(RadioGroup.VERTICAL);
+        
+        radioRapido = new RadioButton(this);
+        radioRapido.setText("Default App (Rapido Rider)");
+        radioRapido.setTextSize(15);
+        
+        radioCustom = new RadioButton(this);
+        radioCustom.setText("Other Apps");
+        radioCustom.setTextSize(15);
+        
+        appModeGroup.addView(radioRapido);
+        appModeGroup.addView(radioCustom);
+        root.addView(appModeGroup, matchWrapWithTop(6));
+
+        String currentMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
+        if ("custom".equals(currentMode)) {
+            radioCustom.setChecked(true);
+        } else {
+            radioRapido.setChecked(true);
+        }
+
+        // Distance Filters Container
+        distanceFiltersContainer = new LinearLayout(this);
+        distanceFiltersContainer.setOrientation(LinearLayout.VERTICAL);
+
+        distanceFiltersContainer.addView(label("Minimum Pickup Distance (km)"), matchWrapWithTop(14));
         minPickupInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f)));
         minPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        root.addView(minPickupInput, matchWrapWithTop(6));
+        distanceFiltersContainer.addView(minPickupInput, matchWrapWithTop(6));
 
-        root.addView(label("Maximum Pickup Distance (km)"), matchWrapWithTop(14));
+        distanceFiltersContainer.addView(label("Maximum Pickup Distance (km)"), matchWrapWithTop(14));
         maxPickupInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f)));
         maxPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        root.addView(maxPickupInput, matchWrapWithTop(6));
+        distanceFiltersContainer.addView(maxPickupInput, matchWrapWithTop(6));
 
-        root.addView(label("Minimum Drop Distance (km)"), matchWrapWithTop(14));
+        distanceFiltersContainer.addView(label("Minimum Drop Distance (km)"), matchWrapWithTop(14));
         minDropInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f)));
         minDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        root.addView(minDropInput, matchWrapWithTop(6));
+        distanceFiltersContainer.addView(minDropInput, matchWrapWithTop(6));
 
-        root.addView(label("Maximum Drop Distance (km)"), matchWrapWithTop(14));
+        distanceFiltersContainer.addView(label("Maximum Drop Distance (km)"), matchWrapWithTop(14));
         maxDropInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f)));
         maxDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        root.addView(maxDropInput, matchWrapWithTop(6));
+        distanceFiltersContainer.addView(maxDropInput, matchWrapWithTop(6));
+
+        root.addView(distanceFiltersContainer, matchWrap());
+
+        // Custom App Container
+        customAppContainer = new LinearLayout(this);
+        customAppContainer.setOrientation(LinearLayout.VERTICAL);
+
+        customAppContainer.addView(label("Custom App Package Name"), matchWrapWithTop(14));
+        customPackageInput = input(prefs.getString(AcceptPrefs.KEY_CUSTOM_PACKAGE, ""));
+        customPackageInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        customPackageInput.setHint("e.g. com.example.rider");
+        customAppContainer.addView(customPackageInput, matchWrapWithTop(6));
+
+        root.addView(customAppContainer, matchWrap());
+
+        // Setup visibility and toggles
+        if ("custom".equals(currentMode)) {
+            distanceFiltersContainer.setVisibility(View.GONE);
+            customAppContainer.setVisibility(View.VISIBLE);
+        } else {
+            distanceFiltersContainer.setVisibility(View.VISIBLE);
+            customAppContainer.setVisibility(View.GONE);
+        }
+
+        radioRapido.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                distanceFiltersContainer.setVisibility(View.VISIBLE);
+                customAppContainer.setVisibility(View.GONE);
+            }
+        });
+
+        radioCustom.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                distanceFiltersContainer.setVisibility(View.GONE);
+                customAppContainer.setVisibility(View.VISIBLE);
+            }
+        });
 
         Button save = primaryButton("Save settings");
         save.setOnClickListener(v -> saveSettings());
         root.addView(save, matchWrapWithTop(16));
 
         TextView footer = new TextView(this);
-        footer.setText("Auto-accepting for com.rapido.rider. Distance limits are used to filter out trips you don't want.");
+        footer.setText("Auto-accepting for configured package. Distance limits are used only in default mode.");
         footer.setTextColor(Color.rgb(92, 101, 100));
         footer.setTextSize(13);
         footer.setPadding(0, dp(18), 0, 0);
@@ -151,12 +225,17 @@ public class MainActivity extends Activity {
     }
 
     private void saveSettings() {
+        String mode = radioCustom.isChecked() ? "custom" : "rapido";
+        String customPkg = customPackageInput.getText().toString().trim();
+
         float minP = parseFloatSafely(minPickupInput.getText().toString());
         float maxP = parseFloatSafely(maxPickupInput.getText().toString());
         float minD = parseFloatSafely(minDropInput.getText().toString());
         float maxD = parseFloatSafely(maxDropInput.getText().toString());
 
         prefs.edit()
+                .putString(AcceptPrefs.KEY_APP_MODE, mode)
+                .putString(AcceptPrefs.KEY_CUSTOM_PACKAGE, customPkg)
                 .putFloat(AcceptPrefs.KEY_MIN_PICKUP, minP)
                 .putFloat(AcceptPrefs.KEY_MAX_PICKUP, maxP)
                 .putFloat(AcceptPrefs.KEY_MIN_DROP, minD)
