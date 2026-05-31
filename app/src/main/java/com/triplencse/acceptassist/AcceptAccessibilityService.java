@@ -144,18 +144,87 @@ public class AcceptAccessibilityService extends AccessibilityService {
         }
 
         String targetText = "Accept";
-        AccessibilityNodeInfo targetNode = null;
-        StringBuilder allText = new StringBuilder();
 
+        java.util.List<AccessibilityNodeInfo> allButtons = new java.util.ArrayList<>();
         java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
         for (android.view.accessibility.AccessibilityWindowInfo window : windows) {
             AccessibilityNodeInfo root = window.getRoot();
             if (root != null && root.getPackageName() != null && packageName.equals(root.getPackageName().toString())) {
-                collectAllText(root, allText);
-                AccessibilityNodeInfo match = findClickableMatch(root, targetText);
-                if (match != null) {
-                    targetNode = match;
+                java.util.List<AccessibilityNodeInfo> matches = new java.util.ArrayList<>();
+                collectMatches(root, targetText, matches);
+                
+                // Get the actual clickable buttons from the matches
+                for (AccessibilityNodeInfo match : matches) {
+                    AccessibilityNodeInfo clickable = nearestClickable(match);
+                    if (clickable != null && clickable.isClickable() && isExactMatch(match, targetText)) {
+                        if (!allButtons.contains(clickable)) {
+                            allButtons.add(clickable);
+                        }
+                    }
                 }
+            }
+        }
+
+        if (allButtons.isEmpty()) {
+            return;
+        }
+
+        // --- Distance Filtering Logic for Multiple Orders ---
+        float minPickup = prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f);
+        float maxPickup = prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f);
+        float minDrop = prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f);
+        float maxDrop = prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f);
+
+        android.os.Handler uiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        AccessibilityNodeInfo targetNode = null;
+
+        for (AccessibilityNodeInfo button : allButtons) {
+            // Find the container card for this specific order by going up 5 levels
+            AccessibilityNodeInfo card = button;
+            for (int i = 0; i < 5; i++) {
+                if (card.getParent() != null) {
+                    card = card.getParent();
+                }
+            }
+
+            StringBuilder cardText = new StringBuilder();
+            collectAllText(card, cardText);
+
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("([0-9.]+)\\s*(km|m)\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
+            java.util.regex.Matcher matcher = pattern.matcher(cardText.toString());
+            java.util.List<Float> distances = new java.util.ArrayList<>();
+            
+            while (matcher.find()) {
+                try {
+                    float val = Float.parseFloat(matcher.group(1));
+                    if (matcher.group(2).toLowerCase(Locale.ROOT).equals("m")) {
+                        val = val / 1000f; // Convert meters to km
+                    }
+                    distances.add(val);
+                } catch (Exception ignored) {}
+            }
+
+            java.util.List<Float> uniqueDistances = new java.util.ArrayList<>();
+            for (float d : distances) {
+                if (uniqueDistances.isEmpty() || uniqueDistances.get(uniqueDistances.size() - 1) != d) {
+                    uniqueDistances.add(d);
+                }
+            }
+
+            if (uniqueDistances.size() >= 2) {
+                float pickupKm = uniqueDistances.get(0);
+                float dropKm = uniqueDistances.get(1);
+
+                if (pickupKm >= minPickup && pickupKm <= maxPickup && dropKm >= minDrop && dropKm <= maxDrop) {
+                    targetNode = button;
+                    break; // Found a valid order!
+                } else {
+                    uiHandler.post(() -> android.widget.Toast.makeText(this, "Ignored an order: Distances out of bounds", android.widget.Toast.LENGTH_SHORT).show());
+                }
+            } else {
+                // If it can't find distances on the card, we accept it by default so we don't break
+                targetNode = button;
+                break;
             }
         }
 
@@ -163,52 +232,10 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return;
         }
 
-        // --- Distance Filtering Logic ---
-        float minPickup = prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f);
-        float maxPickup = prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f);
-        float minDrop = prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f);
-        float maxDrop = prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f);
-
-        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("([0-9.]+)\\s*(km|m)\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
-        java.util.regex.Matcher matcher = pattern.matcher(allText.toString());
-        java.util.List<Float> distances = new java.util.ArrayList<>();
-        
-        while (matcher.find()) {
-            try {
-                float val = Float.parseFloat(matcher.group(1));
-                if (matcher.group(2).toLowerCase(Locale.ROOT).equals("m")) {
-                    val = val / 1000f; // Convert meters to km
-                }
-                distances.add(val);
-            } catch (Exception ignored) {}
-        }
-
-        // Deduplicate consecutive exact same distances (common when text matches content-desc)
-        java.util.List<Float> uniqueDistances = new java.util.ArrayList<>();
-        for (float d : distances) {
-            if (uniqueDistances.isEmpty() || uniqueDistances.get(uniqueDistances.size() - 1) != d) {
-                uniqueDistances.add(d);
-            }
-        }
-
-        android.os.Handler uiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-
-        if (uniqueDistances.size() >= 2) {
-            float pickupKm = uniqueDistances.get(0);
-            float dropKm = uniqueDistances.get(1);
-
-            if (pickupKm < minPickup || pickupKm > maxPickup) {
-                uiHandler.post(() -> android.widget.Toast.makeText(this, "Ignored: Pickup " + pickupKm + "km out of bounds", android.widget.Toast.LENGTH_SHORT).show());
-                return;
-            }
-            if (dropKm < minDrop || dropKm > maxDrop) {
-                uiHandler.post(() -> android.widget.Toast.makeText(this, "Ignored: Drop " + dropKm + "km out of bounds", android.widget.Toast.LENGTH_SHORT).show());
-                return;
-            }
-        }
-
         AccessibilityNodeInfo node = targetNode;
         uiHandler.post(() -> android.widget.Toast.makeText(this, "Accept Assist: Distance valid! Clicking...", android.widget.Toast.LENGTH_SHORT).show());
+
+
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             Rect bounds = new Rect();

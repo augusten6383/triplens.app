@@ -25,7 +25,6 @@ import android.content.pm.PackageManager;
 
 public class MainActivity extends Activity {
     private SharedPreferences prefs;
-    private CheckBox enabledBox;
     private EditText minPickupInput;
     private EditText maxPickupInput;
     private EditText minDropInput;
@@ -100,11 +99,22 @@ public class MainActivity extends Activity {
         accessibility.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         root.addView(accessibility, matchWrapWithTop(14));
 
-        enabledBox = new CheckBox(this);
-        enabledBox.setText("Enable auto-click");
-        enabledBox.setTextSize(16);
-        enabledBox.setChecked(prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false));
-        root.addView(enabledBox, matchWrapWithTop(18));
+        Button toggleServiceBtn = new Button(this);
+        boolean isEnabled = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
+        toggleServiceBtn.setText(isEnabled ? "Stop Auto-Clicker" : "Start Auto-Clicker");
+        toggleServiceBtn.setBackgroundColor(isEnabled ? Color.rgb(200, 50, 50) : Color.rgb(11, 122, 117));
+        toggleServiceBtn.setTextColor(Color.WHITE);
+        toggleServiceBtn.setTextSize(18);
+        toggleServiceBtn.setPadding(0, dp(16), 0, dp(16));
+        toggleServiceBtn.setOnClickListener(v -> {
+            boolean current = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
+            boolean next = !current;
+            prefs.edit().putBoolean(AcceptPrefs.KEY_ENABLED, next).apply();
+            toggleServiceBtn.setText(next ? "Stop Auto-Clicker" : "Start Auto-Clicker");
+            toggleServiceBtn.setBackgroundColor(next ? Color.rgb(200, 50, 50) : Color.rgb(11, 122, 117));
+            Toast.makeText(this, next ? "Auto-Clicker Started" : "Auto-Clicker Stopped", Toast.LENGTH_SHORT).show();
+        });
+        root.addView(toggleServiceBtn, matchWrapWithTop(18));
 
         root.addView(label("Minimum Pickup Distance (km)"), matchWrapWithTop(14));
         minPickupInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f)));
@@ -147,7 +157,6 @@ public class MainActivity extends Activity {
         float maxD = parseFloatSafely(maxDropInput.getText().toString());
 
         prefs.edit()
-                .putBoolean(AcceptPrefs.KEY_ENABLED, enabledBox.isChecked())
                 .putFloat(AcceptPrefs.KEY_MIN_PICKUP, minP)
                 .putFloat(AcceptPrefs.KEY_MAX_PICKUP, maxP)
                 .putFloat(AcceptPrefs.KEY_MIN_DROP, minD)
