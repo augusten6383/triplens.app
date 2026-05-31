@@ -12,6 +12,7 @@ final class AcceptPrefs {
     static final String KEY_LAST_CLICK_MS = "last_click_ms";
     static final String KEY_APP_MODE = "app_mode";
     static final String KEY_CUSTOM_PACKAGE = "custom_package";
+    static final String KEY_CUSTOM_TARGET_TEXT = "custom_target_text";
 
     private AcceptPrefs() {
     }
@@ -30,6 +31,7 @@ final class AcceptPrefs {
             prefs.edit()
                     .putString(KEY_APP_MODE, "rapido")
                     .putString(KEY_CUSTOM_PACKAGE, "")
+                    .putString(KEY_CUSTOM_TARGET_TEXT, "Accept")
                     .apply();
         }
     }

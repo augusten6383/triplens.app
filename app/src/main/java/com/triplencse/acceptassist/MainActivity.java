@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
     private RadioButton radioRapido;
     private RadioButton radioCustom;
     private EditText customPackageInput;
+    private EditText customTargetTextInput;
     private LinearLayout distanceFiltersContainer;
     private LinearLayout customAppContainer;
 
@@ -185,6 +186,12 @@ public class MainActivity extends Activity {
         customPackageInput.setHint("e.g. com.example.rider");
         customAppContainer.addView(customPackageInput, matchWrapWithTop(6));
 
+        customAppContainer.addView(label("Custom Target Texts (comma separated)"), matchWrapWithTop(14));
+        customTargetTextInput = input(prefs.getString(AcceptPrefs.KEY_CUSTOM_TARGET_TEXT, "Accept"));
+        customTargetTextInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        customTargetTextInput.setHint("e.g. Accept,Click here,Go");
+        customAppContainer.addView(customTargetTextInput, matchWrapWithTop(6));
+
         root.addView(customAppContainer, matchWrap());
 
         // Setup visibility and toggles
@@ -227,6 +234,7 @@ public class MainActivity extends Activity {
     private void saveSettings() {
         String mode = radioCustom.isChecked() ? "custom" : "rapido";
         String customPkg = customPackageInput.getText().toString().trim();
+        String customTargetText = customTargetTextInput.getText().toString().trim();
 
         float minP = parseFloatSafely(minPickupInput.getText().toString());
         float maxP = parseFloatSafely(maxPickupInput.getText().toString());
@@ -236,6 +244,7 @@ public class MainActivity extends Activity {
         prefs.edit()
                 .putString(AcceptPrefs.KEY_APP_MODE, mode)
                 .putString(AcceptPrefs.KEY_CUSTOM_PACKAGE, customPkg)
+                .putString(AcceptPrefs.KEY_CUSTOM_TARGET_TEXT, customTargetText)
                 .putFloat(AcceptPrefs.KEY_MIN_PICKUP, minP)
                 .putFloat(AcceptPrefs.KEY_MAX_PICKUP, maxP)
                 .putFloat(AcceptPrefs.KEY_MIN_DROP, minD)

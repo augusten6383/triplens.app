@@ -153,6 +153,13 @@ public class AcceptAccessibilityService extends AccessibilityService {
         }
 
         String targetText = "Accept";
+        String appMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
+        if ("custom".equals(appMode)) {
+            targetText = prefs.getString(AcceptPrefs.KEY_CUSTOM_TARGET_TEXT, "Accept");
+            if (TextUtils.isEmpty(targetText)) {
+                targetText = "Accept";
+            }
+        }
 
         java.util.List<AccessibilityNodeInfo> allButtons = new java.util.ArrayList<>();
         java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
