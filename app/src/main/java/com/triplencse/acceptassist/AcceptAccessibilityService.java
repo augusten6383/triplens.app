@@ -194,7 +194,6 @@ public class AcceptAccessibilityService extends AccessibilityService {
         android.os.Handler uiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
         AccessibilityNodeInfo targetNode = null;
 
-        String appMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
         if ("custom".equals(appMode)) {
             // For custom app mode, bypass distance filters and accept the first found matching button
             targetNode = allButtons.get(0);
