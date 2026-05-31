@@ -180,9 +180,7 @@ public class MainActivity extends Activity {
         retryBtn.setOnClickListener(v -> navigateToScreen());
         root.addView(retryBtn, matchWrapWithTop(12));
 
-        Button configBtn = secondaryButton("Configure DB Settings");
-        configBtn.setOnClickListener(v -> setContentView(buildDbConfigView()));
-        root.addView(configBtn, matchWrapWithTop(12));
+
 
         return root;
     }
@@ -332,9 +330,7 @@ public class MainActivity extends Activity {
         forgotLink.setOnClickListener(v -> setContentView(buildRecoveryView()));
         root.addView(forgotLink, matchWrapWithTop(6));
 
-        Button dbSettingsBtn = secondaryButton("Database Connection Settings");
-        dbSettingsBtn.setOnClickListener(v -> setContentView(buildDbConfigView()));
-        root.addView(dbSettingsBtn, matchWrapWithTop(30));
+
 
         return scrollView;
     }
@@ -725,9 +721,7 @@ public class MainActivity extends Activity {
         save.setOnClickListener(v -> saveSettings());
         root.addView(save, matchWrapWithTop(16));
 
-        Button dbSettingsBtn = secondaryButton("Database Configuration Settings");
-        dbSettingsBtn.setOnClickListener(v -> setContentView(buildDbConfigView()));
-        root.addView(dbSettingsBtn, matchWrapWithTop(12));
+
 
         TextView footer = new TextView(this);
         footer.setText("Auto-accepting for configured package. Distance limits are used only in default mode.");

@@ -143,28 +143,49 @@ public final class TursoHelper {
                     }
                     reader.close();
 
-                    JSONObject responseJson = new JSONObject(response.toString());
-                    if (responseJson.has("results")) {
-                        JSONArray results = responseJson.getJSONArray("results");
-                        JSONObject firstResult = results.getJSONObject(0);
-                        String resultType = firstResult.getString("type");
-                        if ("ok".equals(resultType)) {
-                            JSONObject resultObj = firstResult.getJSONObject("result");
-                            JSONArray rows = resultObj.optJSONArray("rows");
-                            if (rows == null) {
-                                rows = new JSONArray(); // Return empty array on statements with no result rows
+                    try {
+                        JSONObject responseJson = new JSONObject(response.toString());
+                        JSONArray results = responseJson.optJSONArray("results");
+                        if (results != null && results.length() > 0) {
+                            JSONObject firstResult = results.getJSONObject(0);
+                            String resultType = firstResult.optString("type", "");
+                            if ("ok".equals(resultType)) {
+                                JSONObject resultObj = firstResult.optJSONObject("result");
+                                if (resultObj == null) {
+                                    JSONObject respObj = firstResult.optJSONObject("response");
+                                    if (respObj != null) {
+                                        resultObj = respObj.optJSONObject("result");
+                                    }
+                                }
+
+                                if (resultObj != null) {
+                                    JSONArray rows = resultObj.optJSONArray("rows");
+                                    if (rows == null) {
+                                        rows = new JSONArray(); // Return empty array on DDL / updates
+                                    }
+                                    final JSONArray finalRows = rows;
+                                    handler.post(() -> callback.onSuccess(finalRows));
+                                } else {
+                                    handler.post(() -> callback.onError("No 'result' or 'response.result' found in server response. Raw: " + response.toString()));
+                                }
+                            } else if ("error".equals(resultType)) {
+                                JSONObject errObj = firstResult.optJSONObject("error");
+                                String errMsg = "Database statement execution failed";
+                                if (errObj != null) {
+                                    errMsg = errObj.optString("message", errMsg);
+                                } else {
+                                    errMsg = firstResult.optString("message", errMsg);
+                                }
+                                final String finalErrMsg = errMsg;
+                                handler.post(() -> callback.onError(finalErrMsg));
+                            } else {
+                                handler.post(() -> callback.onError("Unknown query response type: " + resultType + ". Raw: " + response.toString()));
                             }
-                            final JSONArray finalRows = rows;
-                            handler.post(() -> callback.onSuccess(finalRows));
-                        } else if ("error".equals(resultType)) {
-                            JSONObject errObj = firstResult.getJSONObject("error");
-                            final String errMsg = errObj.optString("message", "Database statement execution failed");
-                            handler.post(() -> callback.onError(errMsg));
                         } else {
-                            handler.post(() -> callback.onError("Unknown query response type: " + resultType));
+                            handler.post(() -> callback.onError("Invalid JSON response: missing results array. Raw: " + response.toString()));
                         }
-                    } else {
-                        handler.post(() -> callback.onError("Invalid JSON response: missing results"));
+                    } catch (org.json.JSONException jsonEx) {
+                        handler.post(() -> callback.onError("JSON Parsing error: " + jsonEx.getMessage() + ". Raw response: " + response.toString()));
                     }
                 } else {
                     InputStream errIs = conn.getErrorStream();
