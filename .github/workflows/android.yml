@@ -19,11 +19,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Grant Execute Permission
-        run: chmod +x gradlew
+      # Automatically install Gradle on the GitHub runner
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
 
+      # Notice we use 'gradle' instead of './gradlew' here
       - name: Build APK
-        run: ./gradlew assembleDebug
+        run: gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
