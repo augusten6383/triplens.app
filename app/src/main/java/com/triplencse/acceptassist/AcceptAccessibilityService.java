@@ -125,15 +125,11 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return;
         }
 
-        if (clickScheduled && packageName.equals(scheduledPackage)) {
-            return;
-        }
-
         int delayMs = AcceptPrefs.clampDelay(prefs.getInt(AcceptPrefs.KEY_DELAY_MS, AcceptPrefs.DEFAULT_DELAY_MS));
-        clickScheduled = true;
-        scheduledPackage = targetPackage;
+        
+        // Remove any previously scheduled checks and reschedule for [delayMs] after the LATEST event
+        handler.removeCallbacksAndMessages(null);
         handler.postDelayed(() -> {
-            clickScheduled = false;
             clickIfMatched(targetPackage);
         }, delayMs);
     }
