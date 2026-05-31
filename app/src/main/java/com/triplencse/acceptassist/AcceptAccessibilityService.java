@@ -94,7 +94,27 @@ public class AcceptAccessibilityService extends AccessibilityService {
 
         String packageName = event.getPackageName().toString();
         String targetPackage = prefs.getString(AcceptPrefs.KEY_TARGET_PACKAGE, "").trim();
-        if (TextUtils.isEmpty(targetPackage) || !packageName.equals(targetPackage)) {
+        if (TextUtils.isEmpty(targetPackage)) {
+            return;
+        }
+
+        boolean targetWindowFound = false;
+        if (packageName.equals(targetPackage)) {
+            targetWindowFound = true;
+        } else {
+            java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
+            if (windows != null) {
+                for (android.view.accessibility.AccessibilityWindowInfo window : windows) {
+                    AccessibilityNodeInfo root = window.getRoot();
+                    if (root != null && root.getPackageName() != null && targetPackage.equals(root.getPackageName().toString())) {
+                        targetWindowFound = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!targetWindowFound) {
             return;
         }
 
@@ -111,10 +131,10 @@ public class AcceptAccessibilityService extends AccessibilityService {
 
         int delayMs = AcceptPrefs.clampDelay(prefs.getInt(AcceptPrefs.KEY_DELAY_MS, AcceptPrefs.DEFAULT_DELAY_MS));
         clickScheduled = true;
-        scheduledPackage = packageName;
+        scheduledPackage = targetPackage;
         handler.postDelayed(() -> {
             clickScheduled = false;
-            clickIfMatched(packageName);
+            clickIfMatched(targetPackage);
         }, delayMs);
     }
 
@@ -130,19 +150,26 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return;
         }
 
-        AccessibilityNodeInfo root = getRootInActiveWindow();
-        if (root == null) {
-            return;
+        String targetText = prefs.getString(AcceptPrefs.KEY_TARGET_TEXT, AcceptPrefs.DEFAULT_TARGET_TEXT);
+        AccessibilityNodeInfo targetNode = null;
+
+        java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
+        for (android.view.accessibility.AccessibilityWindowInfo window : windows) {
+            AccessibilityNodeInfo root = window.getRoot();
+            if (root != null && root.getPackageName() != null && packageName.equals(root.getPackageName().toString())) {
+                AccessibilityNodeInfo match = findClickableMatch(root, targetText);
+                if (match != null) {
+                    targetNode = match;
+                    break;
+                }
+            }
         }
-        if (root.getPackageName() == null || !packageName.equals(root.getPackageName().toString())) {
+
+        if (targetNode == null) {
             return;
         }
 
-        String targetText = prefs.getString(AcceptPrefs.KEY_TARGET_TEXT, AcceptPrefs.DEFAULT_TARGET_TEXT);
-        AccessibilityNodeInfo node = findClickableMatch(root, targetText);
-        if (node == null) {
-            return;
-        }
+        AccessibilityNodeInfo node = targetNode;
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             Rect bounds = new Rect();
@@ -249,7 +276,8 @@ public class AcceptAccessibilityService extends AccessibilityService {
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
         info.notificationTimeout = 0;
         info.flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
-                | AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
+                | AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+                | AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS;
         info.packageNames = null;
         setServiceInfo(info);
     }
