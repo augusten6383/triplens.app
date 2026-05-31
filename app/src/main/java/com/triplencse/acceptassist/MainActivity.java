@@ -204,6 +204,18 @@ public class MainActivity extends Activity {
         return shape;
     }
 
+    private View circularIcon(String emoji, int bgColor, int sizeDp) {
+        TextView tv = new TextView(this);
+        tv.setText(emoji);
+        tv.setTextSize(16);
+        tv.setGravity(Gravity.CENTER);
+        tv.setBackground(roundedRect(bgColor, sizeDp / 2f));
+        
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp));
+        tv.setLayoutParams(params);
+        return tv;
+    }
+
     private Button primaryButton(String text) {
         Button button = new Button(this);
         button.setText(text);
@@ -716,214 +728,653 @@ public class MainActivity extends Activity {
     private View buildDashboardView() {
         ScrollView scrollView = new ScrollView(this);
         scrollView.setFillViewport(true);
+        scrollView.setBackgroundColor(COLOR_BG);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(24), dp(20), dp(24));
-        root.setBackgroundColor(COLOR_BG);
+        root.setPadding(dp(18), dp(20), dp(18), dp(20));
         scrollView.addView(root);
 
-        TextView title = new TextView(this);
-        title.setText("Triplens");
-        title.setTextColor(COLOR_TEXT_PRIMARY);
-        title.setTextSize(32);
-        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        root.addView(title, matchWrap());
-
-        String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "User");
-        TextView userSessionText = new TextView(this);
-        userSessionText.setText("Logged in as: " + loggedInUser);
-        userSessionText.setTextColor(COLOR_TEXT_SECONDARY);
-        userSessionText.setTextSize(14);
-        userSessionText.setPadding(0, dp(2), 0, dp(2));
-        root.addView(userSessionText, matchWrap());
-
+        // Fetch sub data
         long subExpires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
         int freeClicks = prefs.getInt(AcceptPrefs.KEY_FREE_CLICKS, 0);
-        boolean isSubscribed = subExpires > (System.currentTimeMillis() / 1000L);
+        String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "User");
 
-        TextView subStatusIndicator = new TextView(this);
-        subStatusIndicator.setTextSize(14);
-        subStatusIndicator.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        subStatusIndicator.setPadding(0, dp(2), 0, dp(14));
+        // 1. Header Row
+        root.addView(buildHeaderView(loggedInUser, subExpires, freeClicks));
 
-        if (isSubscribed) {
-            subStatusIndicator.setText("Subscription: Active (Expires: " + formatExpiry(subExpires) + ")");
-            subStatusIndicator.setTextColor(COLOR_ACCENT);
-        } else if (freeClicks > 0) {
-            subStatusIndicator.setText("Subscription: Trial (" + freeClicks + " Free Click" + (freeClicks > 1 ? "s" : "") + " remaining)");
-            subStatusIndicator.setTextColor(COLOR_WARNING);
-        } else {
-            subStatusIndicator.setText("Subscription: Expired");
-            subStatusIndicator.setTextColor(COLOR_DANGER);
-        }
-        root.addView(subStatusIndicator, matchWrap());
+        // 2. Log Out Row
+        root.addView(buildLogOutRow(), matchWrapWithTop(12));
 
-        Button logoutBtn = textLinkButton("Log Out");
-        logoutBtn.setOnClickListener(v -> {
-            prefs.edit().putString(AcceptPrefs.KEY_LOGGED_IN_USER, "").apply();
-            Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show();
-            navigateToScreen();
-        });
-        root.addView(logoutBtn, matchWrapWithTop(4));
+        // 3. Info Description Card
+        root.addView(buildDescriptionCard(), matchWrapWithTop(12));
 
-        TextView subtitle = new TextView(this);
-        subtitle.setText("Auto-clicks a matching button inside your configured custom app.");
-        subtitle.setTextColor(COLOR_TEXT_SECONDARY);
-        subtitle.setTextSize(14);
-        subtitle.setPadding(0, dp(12), 0, dp(16));
-        root.addView(subtitle, matchWrap());
+        // 4. Accessibility Service Status Bar
+        root.addView(buildAccessibilityStatusCard(), matchWrapWithTop(12));
 
-        serviceStatus = statusText();
-        serviceStatus.setGravity(Gravity.CENTER);
-        serviceStatus.setTextSize(15);
-        serviceStatus.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        serviceStatus.setPadding(dp(16), dp(12), dp(16), dp(12));
-        root.addView(serviceStatus, matchWrapWithTop(8));
+        // 5. Actions Buttons (Side-by-Side)
+        root.addView(buildActionButtonsRow(), matchWrapWithTop(12));
 
-        Button accessibility = primaryButton("Open Accessibility Settings");
-        accessibility.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
-        root.addView(accessibility, matchWrapWithTop(16));
+        // 6. App Mode Selection Card
+        root.addView(buildAppModeSelectionCard(), matchWrapWithTop(12));
 
-        Button toggleServiceBtn = new Button(this);
-        boolean isEnabled = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
-        toggleServiceBtn.setText(isEnabled ? "Stop Auto-Clicker" : "Start Auto-Clicker");
-        toggleServiceBtn.setBackground(roundedRect(isEnabled ? COLOR_DANGER : COLOR_ACCENT, 10));
-        toggleServiceBtn.setTextColor(Color.WHITE);
-        toggleServiceBtn.setTextSize(18);
-        toggleServiceBtn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        toggleServiceBtn.setPadding(0, dp(16), 0, dp(16));
-        toggleServiceBtn.setOnClickListener(v -> {
-            boolean current = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
-            boolean next = !current;
-            prefs.edit().putBoolean(AcceptPrefs.KEY_ENABLED, next).apply();
-            toggleServiceBtn.setText(next ? "Stop Auto-Clicker" : "Start Auto-Clicker");
-            toggleServiceBtn.setBackground(roundedRect(next ? COLOR_DANGER : COLOR_ACCENT, 10));
-            Toast.makeText(this, next ? "Auto-Clicker Started" : "Auto-Clicker Stopped", Toast.LENGTH_SHORT).show();
-        });
-        root.addView(toggleServiceBtn, matchWrapWithTop(20));
-
-        root.addView(label("Select App Mode"), matchWrapWithTop(24));
-        
-        appModeGroup = new RadioGroup(this);
-        appModeGroup.setOrientation(RadioGroup.VERTICAL);
-        appModeGroup.setPadding(dp(8), dp(8), dp(8), dp(8));
-        
-        radioRapido = new RadioButton(this);
-        radioRapido.setText("Default App (Rapido Rider)");
-        radioRapido.setTextSize(15);
-        radioRapido.setTextColor(COLOR_TEXT_PRIMARY);
-        
-        radioCustom = new RadioButton(this);
-        radioCustom.setText("Other Apps");
-        radioCustom.setTextSize(15);
-        radioCustom.setTextColor(COLOR_TEXT_PRIMARY);
-        
-        appModeGroup.addView(radioRapido);
-        appModeGroup.addView(radioCustom);
-        root.addView(appModeGroup, matchWrapWithTop(6));
-
+        // 7. Distance Settings / Custom Settings Card (Conditional)
         String currentMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
         if ("custom".equals(currentMode)) {
-            radioCustom.setChecked(true);
+            root.addView(buildCustomAppSettingsCard(), matchWrapWithTop(12));
         } else {
-            radioRapido.setChecked(true);
+            root.addView(buildDistanceSettingsCard(), matchWrapWithTop(12));
         }
 
-        distanceFiltersContainer = new LinearLayout(this);
-        distanceFiltersContainer.setOrientation(LinearLayout.VERTICAL);
-        distanceFiltersContainer.setBackground(roundedRect(COLOR_CARD, 12));
-        distanceFiltersContainer.setPadding(dp(16), dp(16), dp(16), dp(16));
+        // 8. Save Settings Button
+        Button saveBtn = primaryButton("Save Settings");
+        saveBtn.setOnClickListener(v -> saveSettings());
+        root.addView(saveBtn, matchWrapWithTop(18));
 
-        distanceFiltersContainer.addView(label("Minimum Pickup Distance (km)"), matchWrap());
-        minPickupInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f)));
-        minPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        distanceFiltersContainer.addView(minPickupInput, matchWrapWithTop(6));
-
-        distanceFiltersContainer.addView(label("Maximum Pickup Distance (km)"), matchWrapWithTop(14));
-        maxPickupInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f)));
-        maxPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        distanceFiltersContainer.addView(maxPickupInput, matchWrapWithTop(6));
-
-        distanceFiltersContainer.addView(label("Minimum Drop Distance (km)"), matchWrapWithTop(14));
-        minDropInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f)));
-        minDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        distanceFiltersContainer.addView(minDropInput, matchWrapWithTop(6));
-
-        distanceFiltersContainer.addView(label("Maximum Drop Distance (km)"), matchWrapWithTop(14));
-        maxDropInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f)));
-        maxDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        distanceFiltersContainer.addView(maxDropInput, matchWrapWithTop(6));
-
-        root.addView(distanceFiltersContainer, matchWrapWithTop(16));
-
-        customAppContainer = new LinearLayout(this);
-        customAppContainer.setOrientation(LinearLayout.VERTICAL);
-        customAppContainer.setBackground(roundedRect(COLOR_CARD, 12));
-        customAppContainer.setPadding(dp(16), dp(16), dp(16), dp(16));
-
-        customAppContainer.addView(label("Custom App Package Name"), matchWrap());
-        customPackageInput = input(prefs.getString(AcceptPrefs.KEY_CUSTOM_PACKAGE, ""));
-        customPackageInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        customPackageInput.setHint("e.g. com.example.rider");
-        customAppContainer.addView(customPackageInput, matchWrapWithTop(6));
-
-        customAppContainer.addView(label("Custom Target Texts (comma separated)"), matchWrapWithTop(14));
-        customTargetTextInput = input(prefs.getString(AcceptPrefs.KEY_CUSTOM_TARGET_TEXT, "Accept"));
-        customTargetTextInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        customTargetTextInput.setHint("e.g. Accept,Click here,Go");
-        customAppContainer.addView(customTargetTextInput, matchWrapWithTop(6));
-
-        root.addView(customAppContainer, matchWrapWithTop(16));
-
-        if ("custom".equals(currentMode)) {
-            distanceFiltersContainer.setVisibility(View.GONE);
-            customAppContainer.setVisibility(View.VISIBLE);
-        } else {
-            distanceFiltersContainer.setVisibility(View.VISIBLE);
-            customAppContainer.setVisibility(View.GONE);
-        }
-
-        radioRapido.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (isChecked) {
-                distanceFiltersContainer.setVisibility(View.VISIBLE);
-                customAppContainer.setVisibility(View.GONE);
-            }
-        });
-
-        radioCustom.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (isChecked) {
-                distanceFiltersContainer.setVisibility(View.GONE);
-                customAppContainer.setVisibility(View.VISIBLE);
-            }
-        });
-
-        Button save = primaryButton("Save Settings");
-        save.setOnClickListener(v -> saveSettings());
-        root.addView(save, matchWrapWithTop(24));
-
+        // 9. Footer
         TextView footer = new TextView(this);
         footer.setText("Auto-clicking for configured package. Distance limits are used only in default mode.");
         footer.setTextColor(COLOR_TEXT_SECONDARY);
-        footer.setTextSize(13);
-        footer.setPadding(0, dp(18), 0, 0);
+        footer.setTextSize(12);
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(0, dp(20), 0, dp(10));
         root.addView(footer, matchWrap());
 
         return scrollView;
     }
 
-    private void saveSettings() {
-        String mode = radioCustom.isChecked() ? "custom" : "rapido";
-        String customPkg = customPackageInput.getText().toString().trim();
-        String customTargetText = customTargetTextInput.getText().toString().trim();
+    private View buildHeaderView(String loggedInUser, long subExpires, int freeClicks) {
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(0, 0, 0, dp(16));
 
-        float minP = parseFloatSafely(minPickupInput.getText().toString());
-        float maxP = parseFloatSafely(maxPickupInput.getText().toString());
-        float minD = parseFloatSafely(minDropInput.getText().toString());
-        float maxD = parseFloatSafely(maxDropInput.getText().toString());
+        // Left Section: App Logo + Name
+        LinearLayout leftSec = new LinearLayout(this);
+        leftSec.setOrientation(LinearLayout.HORIZONTAL);
+        leftSec.setGravity(Gravity.CENTER_VERTICAL);
+        
+        // Glowing app icon
+        View appIcon = circularIcon("🖱️", Color.rgb(8, 145, 178), 44);
+        leftSec.addView(appIcon);
+
+        LinearLayout nameSec = new LinearLayout(this);
+        nameSec.setOrientation(LinearLayout.VERTICAL);
+        nameSec.setPadding(dp(10), 0, 0, 0);
+
+        TextView appTitle = new TextView(this);
+        appTitle.setText("TripLens");
+        appTitle.setTextColor(Color.WHITE);
+        appTitle.setTextSize(22);
+        appTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        nameSec.addView(appTitle);
+
+        TextView userText = new TextView(this);
+        userText.setTextColor(COLOR_TEXT_SECONDARY);
+        userText.setTextSize(12);
+        
+        android.text.SpannableStringBuilder builder = new android.text.SpannableStringBuilder();
+        builder.append("Logged in as: ");
+        int start = builder.length();
+        builder.append(loggedInUser);
+        builder.setSpan(new android.text.style.ForegroundColorSpan(Color.rgb(6, 182, 212)), start, builder.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        builder.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), start, builder.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        userText.setText(builder);
+        nameSec.addView(userText);
+
+        leftSec.addView(nameSec);
+        
+        LinearLayout.LayoutParams leftParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        header.addView(leftSec, leftParams);
+
+        // Right Section: Subscription Card
+        LinearLayout subCard = new LinearLayout(this);
+        subCard.setOrientation(LinearLayout.HORIZONTAL);
+        subCard.setGravity(Gravity.CENTER_VERTICAL);
+        subCard.setBackground(roundedRect(COLOR_CARD, 12));
+        subCard.setPadding(dp(12), dp(8), dp(12), dp(8));
+
+        View crownIcon = circularIcon("👑", Color.rgb(217, 119, 6), 32);
+        subCard.addView(crownIcon);
+
+        LinearLayout subTextSec = new LinearLayout(this);
+        subTextSec.setOrientation(LinearLayout.VERTICAL);
+        subTextSec.setPadding(dp(8), 0, dp(8), 0);
+
+        TextView subTitle = new TextView(this);
+        subTitle.setText("Subscription");
+        subTitle.setTextColor(COLOR_TEXT_SECONDARY);
+        subTitle.setTextSize(11);
+        subTextSec.addView(subTitle);
+
+        boolean isSubscribed = subExpires > (System.currentTimeMillis() / 1000L);
+        TextView subStatus = new TextView(this);
+        subStatus.setTextSize(13);
+        subStatus.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        
+        TextView subDesc = new TextView(this);
+        subDesc.setTextColor(COLOR_TEXT_SECONDARY);
+        subDesc.setTextSize(10);
+
+        if (isSubscribed) {
+            subStatus.setText("Active");
+            subStatus.setTextColor(COLOR_ACCENT);
+            subDesc.setText("Expires soon");
+        } else if (freeClicks > 0) {
+            subStatus.setText("Trial");
+            subStatus.setTextColor(COLOR_WARNING);
+            subDesc.setText(freeClicks + " Click" + (freeClicks > 1 ? "s" : "") + " remaining");
+        } else {
+            subStatus.setText("Expired");
+            subStatus.setTextColor(COLOR_DANGER);
+            subDesc.setText("Buy a pass");
+        }
+        subTextSec.addView(subStatus);
+        subTextSec.addView(subDesc);
+
+        subCard.addView(subTextSec);
+
+        TextView chevron = new TextView(this);
+        chevron.setText(">");
+        chevron.setTextColor(COLOR_TEXT_SECONDARY);
+        chevron.setTextSize(14);
+        subCard.addView(chevron);
+
+        subCard.setOnClickListener(v -> {
+            setContentView(buildSubscriptionView());
+        });
+
+        header.addView(subCard);
+
+        return header;
+    }
+
+    private View buildLogOutRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(roundedRect(COLOR_CARD, 12));
+        row.setPadding(dp(16), dp(12), dp(16), dp(12));
+
+        View logoutIcon = circularIcon("🚪", Color.rgb(6, 95, 70), 32);
+        row.addView(logoutIcon);
+
+        TextView text = new TextView(this);
+        text.setText("Log Out");
+        text.setTextColor(COLOR_ACCENT);
+        text.setTextSize(16);
+        text.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        text.setPadding(dp(12), 0, 0, 0);
+
+        LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        row.addView(text, textParams);
+
+        TextView chevron = new TextView(this);
+        chevron.setText(">");
+        chevron.setTextColor(COLOR_TEXT_SECONDARY);
+        chevron.setTextSize(16);
+        row.addView(chevron);
+
+        row.setOnClickListener(v -> {
+            prefs.edit().putString(AcceptPrefs.KEY_LOGGED_IN_USER, "").apply();
+            Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show();
+            navigateToScreen();
+        });
+
+        return row;
+    }
+
+    private View buildDescriptionCard() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(roundedRect(COLOR_CARD, 12));
+        row.setPadding(dp(16), dp(12), dp(16), dp(12));
+
+        View infoIcon = circularIcon("ℹ️", Color.rgb(30, 58, 138), 32);
+        row.addView(infoIcon);
+
+        TextView text = new TextView(this);
+        text.setText("Auto-clicks a matching button inside your configured custom app.");
+        text.setTextColor(COLOR_TEXT_SECONDARY);
+        text.setTextSize(13);
+        text.setPadding(dp(12), 0, 0, 0);
+
+        row.addView(text, matchWrap());
+        return row;
+    }
+
+    private View buildAccessibilityStatusCard() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(16), dp(14), dp(16), dp(14));
+        
+        boolean serviceEnabled = isAccessibilityServiceEnabled();
+        row.setBackground(roundedRectWithBorder(COLOR_CARD, 12, serviceEnabled ? COLOR_ACCENT : COLOR_DANGER, 1));
+
+        View statusIcon = circularIcon(serviceEnabled ? "🔓" : "🔒", serviceEnabled ? Color.rgb(6, 95, 70) : Color.rgb(153, 27, 27), 36);
+        row.addView(statusIcon);
+
+        LinearLayout textSec = new LinearLayout(this);
+        textSec.setOrientation(LinearLayout.VERTICAL);
+        textSec.setPadding(dp(12), 0, dp(12), 0);
+
+        TextView statusText = new TextView(this);
+        statusText.setTextSize(15);
+        statusText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        
+        android.text.SpannableStringBuilder builder = new android.text.SpannableStringBuilder();
+        builder.append("Accessibility Service: ");
+        int start = builder.length();
+        if (serviceEnabled) {
+            builder.append("ACTIVE");
+            builder.setSpan(new android.text.style.ForegroundColorSpan(COLOR_ACCENT), start, builder.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        } else {
+            builder.append("DISABLED");
+            builder.setSpan(new android.text.style.ForegroundColorSpan(COLOR_DANGER), start, builder.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        statusText.setText(builder);
+        textSec.addView(statusText);
+
+        TextView subtext = new TextView(this);
+        subtext.setText(serviceEnabled ? "Service is ready to click" : "Enable accessibility to start auto-clicker");
+        subtext.setTextColor(COLOR_TEXT_SECONDARY);
+        subtext.setTextSize(12);
+        textSec.addView(subtext);
+
+        LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        row.addView(textSec, textParams);
+
+        android.widget.Switch toggle = new android.widget.Switch(this);
+        toggle.setChecked(serviceEnabled);
+        toggle.setClickable(false); // Handle through row click
+        row.addView(toggle);
+
+        row.setOnClickListener(v -> {
+            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+        });
+
+        return row;
+    }
+
+    private View buildActionButtonsRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        // Left button: Open Accessibility Settings
+        LinearLayout openBtn = new LinearLayout(this);
+        openBtn.setOrientation(LinearLayout.HORIZONTAL);
+        openBtn.setGravity(Gravity.CENTER_VERTICAL);
+        openBtn.setBackground(roundedRect(COLOR_CARD, 12));
+        openBtn.setPadding(dp(12), dp(14), dp(12), dp(14));
+        openBtn.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+
+        View gearIcon = circularIcon("⚙️", Color.rgb(30, 41, 59), 32);
+        openBtn.addView(gearIcon);
+
+        LinearLayout openTextSec = new LinearLayout(this);
+        openTextSec.setOrientation(LinearLayout.VERTICAL);
+        openTextSec.setPadding(dp(8), 0, dp(4), 0);
+
+        TextView openText = new TextView(this);
+        openText.setText("Open Accessibility");
+        openText.setTextColor(Color.WHITE);
+        openText.setTextSize(13);
+        openText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        
+        TextView openSubtext = new TextView(this);
+        openSubtext.setText("Settings");
+        openSubtext.setTextColor(COLOR_TEXT_SECONDARY);
+        openSubtext.setTextSize(11);
+
+        openTextSec.addView(openText);
+        openTextSec.addView(openSubtext);
+
+        LinearLayout.LayoutParams openTextParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        openBtn.addView(openTextSec, openTextParams);
+
+        TextView openChevron = new TextView(this);
+        openChevron.setText(">");
+        openChevron.setTextColor(COLOR_TEXT_SECONDARY);
+        openChevron.setTextSize(14);
+        openBtn.addView(openChevron);
+
+        LinearLayout.LayoutParams leftParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f);
+        leftParams.rightMargin = dp(8);
+        row.addView(openBtn, leftParams);
+
+        // Right button: Start/Stop Auto-Clicker
+        LinearLayout toggleBtn = new LinearLayout(this);
+        toggleBtn.setOrientation(LinearLayout.HORIZONTAL);
+        toggleBtn.setGravity(Gravity.CENTER_VERTICAL);
+        
+        boolean isEnabled = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
+        toggleBtn.setBackground(roundedRect(isEnabled ? COLOR_DANGER : COLOR_ACCENT, 12));
+        toggleBtn.setPadding(dp(12), dp(14), dp(12), dp(14));
+
+        View playIcon = circularIcon(isEnabled ? "⏹️" : "▶️", Color.WHITE, 32);
+        if (playIcon instanceof TextView) {
+            ((TextView) playIcon).setTextColor(isEnabled ? COLOR_DANGER : COLOR_ACCENT);
+        }
+        toggleBtn.addView(playIcon);
+
+        LinearLayout toggleTextSec = new LinearLayout(this);
+        toggleTextSec.setOrientation(LinearLayout.VERTICAL);
+        toggleTextSec.setPadding(dp(8), 0, 0, 0);
+
+        TextView toggleText = new TextView(this);
+        toggleText.setText(isEnabled ? "STOP CLICKER" : "START CLICKER");
+        toggleText.setTextColor(Color.WHITE);
+        toggleText.setTextSize(12);
+        toggleText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+
+        TextView toggleSubtext = new TextView(this);
+        toggleSubtext.setText(isEnabled ? "Tap to pause clicks" : "Tap to start auto clicking");
+        toggleSubtext.setTextColor(Color.rgb(220, 252, 231));
+        toggleSubtext.setTextSize(10);
+
+        toggleTextSec.addView(toggleText);
+        toggleTextSec.addView(toggleSubtext);
+
+        toggleBtn.addView(toggleTextSec);
+
+        toggleBtn.setOnClickListener(v -> {
+            boolean current = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
+            boolean next = !current;
+            prefs.edit().putBoolean(AcceptPrefs.KEY_ENABLED, next).apply();
+            
+            Toast.makeText(this, next ? "Auto-Clicker Started" : "Auto-Clicker Stopped", Toast.LENGTH_SHORT).show();
+            setContentView(buildDashboardView());
+        });
+
+        LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f);
+        rightParams.leftMargin = dp(8);
+        row.addView(toggleBtn, rightParams);
+
+        return row;
+    }
+
+    private View buildAppModeSelectionCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(roundedRect(COLOR_CARD, 12));
+        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+
+        // Header
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(0, 0, 0, dp(12));
+
+        TextView icon = new TextView(this);
+        icon.setText("👤");
+        icon.setTextSize(16);
+        header.addView(icon);
+
+        TextView title = new TextView(this);
+        title.setText("Select App Mode");
+        title.setTextColor(COLOR_TEXT_PRIMARY);
+        title.setTextSize(15);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setPadding(dp(8), 0, 0, 0);
+        header.addView(title);
+
+        card.addView(header);
+
+        // Options Row
+        LinearLayout optionsRow = new LinearLayout(this);
+        optionsRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        String currentMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
+        boolean isRapidoSelected = "rapido".equals(currentMode);
+
+        // Option 1: Rapido
+        LinearLayout rapidoOpt = new LinearLayout(this);
+        rapidoOpt.setOrientation(LinearLayout.HORIZONTAL);
+        rapidoOpt.setGravity(Gravity.CENTER_VERTICAL);
+        rapidoOpt.setPadding(dp(12), dp(12), dp(12), dp(12));
+        rapidoOpt.setBackground(roundedRectWithBorder(COLOR_INPUT_BG, 10, isRapidoSelected ? COLOR_ACCENT : Color.TRANSPARENT, 1));
+        
+        TextView radioDot1 = new TextView(this);
+        radioDot1.setText(isRapidoSelected ? "🔘" : "⚪");
+        radioDot1.setTextSize(16);
+        rapidoOpt.addView(radioDot1);
+
+        View rapidoIcon = circularIcon("🏍️", Color.rgb(6, 95, 70), 28);
+        LinearLayout.LayoutParams iconParams1 = new LinearLayout.LayoutParams(dp(28), dp(28));
+        iconParams1.leftMargin = dp(8);
+        rapidoIcon.setLayoutParams(iconParams1);
+        rapidoOpt.addView(rapidoIcon);
+
+        LinearLayout rapidoTextSec = new LinearLayout(this);
+        rapidoTextSec.setOrientation(LinearLayout.VERTICAL);
+        rapidoTextSec.setPadding(dp(8), 0, 0, 0);
+
+        TextView rapidoTitle = new TextView(this);
+        rapidoTitle.setText("Default App");
+        rapidoTitle.setTextColor(COLOR_TEXT_PRIMARY);
+        rapidoTitle.setTextSize(13);
+        rapidoTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+
+        TextView rapidoSub = new TextView(this);
+        rapidoSub.setText("(Rapido Rider)");
+        rapidoSub.setTextColor(COLOR_TEXT_SECONDARY);
+        rapidoSub.setTextSize(11);
+
+        rapidoTextSec.addView(rapidoTitle);
+        rapidoTextSec.addView(rapidoSub);
+        rapidoOpt.addView(rapidoTextSec);
+
+        rapidoOpt.setOnClickListener(v -> {
+            prefs.edit().putString(AcceptPrefs.KEY_APP_MODE, "rapido").apply();
+            setContentView(buildDashboardView());
+        });
+
+        LinearLayout.LayoutParams param1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        param1.rightMargin = dp(6);
+        optionsRow.addView(rapidoOpt, param1);
+
+        // Option 2: Custom
+        LinearLayout customOpt = new LinearLayout(this);
+        customOpt.setOrientation(LinearLayout.HORIZONTAL);
+        customOpt.setGravity(Gravity.CENTER_VERTICAL);
+        customOpt.setPadding(dp(12), dp(12), dp(12), dp(12));
+        customOpt.setBackground(roundedRectWithBorder(COLOR_INPUT_BG, 10, !isRapidoSelected ? COLOR_ACCENT : Color.TRANSPARENT, 1));
+
+        TextView radioDot2 = new TextView(this);
+        radioDot2.setText(!isRapidoSelected ? "🔘" : "⚪");
+        radioDot2.setTextSize(16);
+        customOpt.addView(radioDot2);
+
+        View customIcon = circularIcon("📱", Color.rgb(30, 41, 59), 28);
+        LinearLayout.LayoutParams iconParams2 = new LinearLayout.LayoutParams(dp(28), dp(28));
+        iconParams2.leftMargin = dp(8);
+        customIcon.setLayoutParams(iconParams2);
+        customOpt.addView(customIcon);
+
+        LinearLayout customTextSec = new LinearLayout(this);
+        customTextSec.setOrientation(LinearLayout.VERTICAL);
+        customTextSec.setPadding(dp(8), 0, 0, 0);
+
+        TextView customTitleText = new TextView(this);
+        customTitleText.setText("Other Apps");
+        customTitleText.setTextColor(COLOR_TEXT_PRIMARY);
+        customTitleText.setTextSize(13);
+        customTitleText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+
+        TextView customSub = new TextView(this);
+        customSub.setText("(Custom App)");
+        customSub.setTextColor(COLOR_TEXT_SECONDARY);
+        customSub.setTextSize(11);
+
+        customTextSec.addView(customTitleText);
+        customTextSec.addView(customSub);
+        customOpt.addView(customTextSec);
+
+        customOpt.setOnClickListener(v -> {
+            prefs.edit().putString(AcceptPrefs.KEY_APP_MODE, "custom").apply();
+            setContentView(buildDashboardView());
+        });
+
+        LinearLayout.LayoutParams param2 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        param2.leftMargin = dp(6);
+        optionsRow.addView(customOpt, param2);
+
+        card.addView(optionsRow);
+        return card;
+    }
+
+    private View buildSettingRow(String title, String subtitle, EditText inputField, String emoji, int emojiBgColor) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(8), 0, dp(8));
+
+        View squareIcon = circularIcon(emoji, emojiBgColor, 36);
+        row.addView(squareIcon);
+
+        LinearLayout textSec = new LinearLayout(this);
+        textSec.setOrientation(LinearLayout.VERTICAL);
+        textSec.setPadding(dp(12), 0, dp(12), 0);
+
+        TextView titleView = new TextView(this);
+        titleView.setText(title);
+        titleView.setTextColor(COLOR_TEXT_PRIMARY);
+        titleView.setTextSize(14);
+        titleView.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        textSec.addView(titleView);
+
+        TextView subView = new TextView(this);
+        subView.setText(subtitle);
+        subView.setTextColor(COLOR_TEXT_SECONDARY);
+        subView.setTextSize(11);
+        textSec.addView(subView);
+
+        LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        row.addView(textSec, textParams);
+
+        inputField.setGravity(Gravity.CENTER);
+        inputField.setTextSize(14);
+        inputField.setTextColor(COLOR_TEXT_PRIMARY);
+        inputField.setPadding(dp(12), dp(6), dp(12), dp(6));
+        inputField.setBackground(roundedRect(COLOR_INPUT_BG, 8));
+        
+        LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(dp(80), LinearLayout.LayoutParams.WRAP_CONTENT);
+        row.addView(inputField, inputParams);
+
+        return row;
+    }
+
+    private View buildDistanceSettingsCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(roundedRect(COLOR_CARD, 12));
+        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+
+        // Header
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(0, 0, 0, dp(12));
+
+        TextView icon = new TextView(this);
+        icon.setText("⚙️");
+        icon.setTextSize(16);
+        header.addView(icon);
+
+        TextView title = new TextView(this);
+        title.setText("Distance Settings (km)");
+        title.setTextColor(COLOR_TEXT_PRIMARY);
+        title.setTextSize(15);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setPadding(dp(8), 0, 0, 0);
+        header.addView(title);
+
+        card.addView(header);
+
+        // Row 1: Min Pickup
+        minPickupInput = new EditText(this);
+        minPickupInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f)));
+        minPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        card.addView(buildSettingRow("Minimum Pickup Distance", "Set the minimum distance (km)", minPickupInput, "📍", Color.rgb(109, 40, 217)));
+
+        // Row 2: Max Pickup
+        maxPickupInput = new EditText(this);
+        maxPickupInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f)));
+        maxPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        card.addView(buildSettingRow("Maximum Pickup Distance", "Set the maximum distance (km)", maxPickupInput, "↗️", Color.rgb(29, 78, 216)));
+
+        // Row 3: Min Drop
+        minDropInput = new EditText(this);
+        minDropInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f)));
+        minDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        card.addView(buildSettingRow("Minimum Drop Distance", "Set the minimum drop distance (km)", minDropInput, "📥", Color.rgb(194, 65, 12)));
+
+        // Row 4: Max Drop
+        maxDropInput = new EditText(this);
+        maxDropInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f)));
+        maxDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        card.addView(buildSettingRow("Maximum Drop Distance", "Set the maximum drop distance (km)", maxDropInput, "📤", Color.rgb(190, 24, 74)));
+
+        return card;
+    }
+
+    private View buildCustomAppSettingsCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(roundedRect(COLOR_CARD, 12));
+        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+
+        // Header
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(0, 0, 0, dp(12));
+
+        TextView icon = new TextView(this);
+        icon.setText("⚙️");
+        icon.setTextSize(16);
+        header.addView(icon);
+
+        TextView title = new TextView(this);
+        title.setText("Custom App Settings");
+        title.setTextColor(COLOR_TEXT_PRIMARY);
+        title.setTextSize(15);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setPadding(dp(8), 0, 0, 0);
+        header.addView(title);
+
+        card.addView(header);
+
+        // Row 1: Custom Package Name
+        customPackageInput = new EditText(this);
+        customPackageInput.setText(prefs.getString(AcceptPrefs.KEY_CUSTOM_PACKAGE, ""));
+        customPackageInput.setHint("com.example");
+        customPackageInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        card.addView(buildSettingRow("App Package Name", "Package name of target app", customPackageInput, "📱", Color.rgb(29, 78, 216)));
+
+        // Row 2: Custom Target Texts
+        customTargetTextInput = new EditText(this);
+        customTargetTextInput.setText(prefs.getString(AcceptPrefs.KEY_CUSTOM_TARGET_TEXT, "Accept"));
+        customTargetTextInput.setHint("Accept,Click");
+        customTargetTextInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        card.addView(buildSettingRow("Target Click Texts", "Comma-separated target values", customTargetTextInput, "✏️", Color.rgb(15, 118, 110)));
+
+        return card;
+    }
+
+    private void saveSettings() {
+        String customPkg = (customPackageInput != null) ? customPackageInput.getText().toString().trim() : prefs.getString(AcceptPrefs.KEY_CUSTOM_PACKAGE, "");
+        String customTargetText = (customTargetTextInput != null) ? customTargetTextInput.getText().toString().trim() : prefs.getString(AcceptPrefs.KEY_CUSTOM_TARGET_TEXT, "Accept");
+
+        float minP = (minPickupInput != null) ? parseFloatSafely(minPickupInput.getText().toString()) : prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f);
+        float maxP = (maxPickupInput != null) ? parseFloatSafely(maxPickupInput.getText().toString()) : prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f);
+        float minD = (minDropInput != null) ? parseFloatSafely(minDropInput.getText().toString()) : prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f);
+        float maxD = (maxDropInput != null) ? parseFloatSafely(maxDropInput.getText().toString()) : prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f);
 
         prefs.edit()
-                .putString(AcceptPrefs.KEY_APP_MODE, mode)
                 .putString(AcceptPrefs.KEY_CUSTOM_PACKAGE, customPkg)
                 .putString(AcceptPrefs.KEY_CUSTOM_TARGET_TEXT, customTargetText)
                 .putFloat(AcceptPrefs.KEY_MIN_PICKUP, minP)
@@ -945,9 +1396,11 @@ public class MainActivity extends Activity {
 
     private void refreshStatus() {
         boolean serviceEnabled = isAccessibilityServiceEnabled();
-        serviceStatus.setText(serviceEnabled ? "Accessibility Service: ACTIVE" : "Accessibility Service: DISABLED");
-        serviceStatus.setTextColor(Color.WHITE);
-        serviceStatus.setBackground(roundedRect(serviceEnabled ? Color.rgb(6, 95, 70) : Color.rgb(153, 27, 27), 8));
+        if (serviceStatus != null) {
+            serviceStatus.setText(serviceEnabled ? "Accessibility Service: ACTIVE" : "Accessibility Service: DISABLED");
+            serviceStatus.setTextColor(Color.WHITE);
+            serviceStatus.setBackground(roundedRect(serviceEnabled ? Color.rgb(6, 95, 70) : Color.rgb(153, 27, 27), 8));
+        }
     }
 
     private boolean isAccessibilityServiceEnabled() {
