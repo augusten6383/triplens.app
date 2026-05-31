@@ -1201,7 +1201,7 @@ public class MainActivity extends Activity {
 
         customOpt.addView(radioRing(!isRapidoSelected));
 
-        View customIcon = systemIcon(android.R.drawable.ic_menu_apps, Color.rgb(30, 41, 59), 28, 6);
+        View customIcon = systemIcon(android.R.drawable.ic_menu_view, Color.rgb(30, 41, 59), 28, 6);
         LinearLayout.LayoutParams iconParams2 = new LinearLayout.LayoutParams(dp(28), dp(28));
         iconParams2.leftMargin = dp(8);
         customIcon.setLayoutParams(iconParams2);
@@ -1360,7 +1360,7 @@ public class MainActivity extends Activity {
         customPackageInput.setText(prefs.getString(AcceptPrefs.KEY_CUSTOM_PACKAGE, ""));
         customPackageInput.setHint("com.example");
         customPackageInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        card.addView(buildSettingRow("App Package Name", "Package name of target app", customPackageInput, android.R.drawable.ic_menu_apps, Color.rgb(29, 78, 216)));
+        card.addView(buildSettingRow("App Package Name", "Package name of target app", customPackageInput, android.R.drawable.ic_menu_view, Color.rgb(29, 78, 216)));
 
         // Row 2: Custom Target Texts
         customTargetTextInput = new EditText(this);
