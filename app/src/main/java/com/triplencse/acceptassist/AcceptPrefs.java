@@ -9,6 +9,7 @@ final class AcceptPrefs {
     static final String KEY_MAX_PICKUP = "max_pickup";
     static final String KEY_MIN_DROP = "min_drop";
     static final String KEY_MAX_DROP = "max_drop";
+    static final String KEY_LAST_CLICK_MS = "last_click_ms";
 
     private AcceptPrefs() {
     }
