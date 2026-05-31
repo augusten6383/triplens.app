@@ -204,16 +204,37 @@ public class MainActivity extends Activity {
         return shape;
     }
 
-    private View circularIcon(String emoji, int bgColor, int sizeDp) {
-        TextView tv = new TextView(this);
-        tv.setText(emoji);
-        tv.setTextSize(16);
-        tv.setGravity(Gravity.CENTER);
-        tv.setBackground(roundedRect(bgColor, sizeDp / 2f));
+    private View systemIcon(int drawableId, int bgColor, int sizeDp, int paddingDp) {
+        android.widget.ImageView iv = new android.widget.ImageView(this);
+        iv.setImageResource(drawableId);
+        iv.setColorFilter(Color.WHITE);
+        iv.setPadding(dp(paddingDp), dp(paddingDp), dp(paddingDp), dp(paddingDp));
+        iv.setBackground(roundedRect(bgColor, sizeDp / 2f));
         
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp));
-        tv.setLayoutParams(params);
-        return tv;
+        iv.setLayoutParams(params);
+        return iv;
+    }
+
+    private View headerIcon(int drawableId) {
+        android.widget.ImageView iv = new android.widget.ImageView(this);
+        iv.setImageResource(drawableId);
+        iv.setColorFilter(COLOR_TEXT_PRIMARY);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(18), dp(18));
+        iv.setLayoutParams(params);
+        return iv;
+    }
+
+    private View radioRing(boolean selected) {
+        View view = new View(this);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(16), dp(16));
+        view.setLayoutParams(params);
+        if (selected) {
+            view.setBackground(roundedRectWithBorder(COLOR_INPUT_BG, 8, COLOR_ACCENT, 5));
+        } else {
+            view.setBackground(roundedRectWithBorder(COLOR_INPUT_BG, 8, COLOR_TEXT_SECONDARY, 1));
+        }
+        return view;
     }
 
     private Button primaryButton(String text) {
@@ -763,6 +784,7 @@ public class MainActivity extends Activity {
         if ("custom".equals(currentMode)) {
             root.addView(buildCustomAppSettingsCard(), matchWrapWithTop(12));
         } else {
+            root.addView(buildTargetedAppsCard(), matchWrapWithTop(12));
             root.addView(buildDistanceSettingsCard(), matchWrapWithTop(12));
         }
 
@@ -794,8 +816,8 @@ public class MainActivity extends Activity {
         leftSec.setOrientation(LinearLayout.HORIZONTAL);
         leftSec.setGravity(Gravity.CENTER_VERTICAL);
         
-        // Glowing app icon
-        View appIcon = circularIcon("🖱️", Color.rgb(8, 145, 178), 44);
+        // Glowing app icon (using system compass location)
+        View appIcon = systemIcon(android.R.drawable.ic_menu_compass, Color.rgb(8, 145, 178), 44, 10);
         leftSec.addView(appIcon);
 
         LinearLayout nameSec = new LinearLayout(this);
@@ -834,7 +856,7 @@ public class MainActivity extends Activity {
         subCard.setBackground(roundedRect(COLOR_CARD, 12));
         subCard.setPadding(dp(12), dp(8), dp(12), dp(8));
 
-        View crownIcon = circularIcon("👑", Color.rgb(217, 119, 6), 32);
+        View crownIcon = systemIcon(android.R.drawable.btn_star_big_on, Color.rgb(217, 119, 6), 32, 6);
         subCard.addView(crownIcon);
 
         LinearLayout subTextSec = new LinearLayout(this);
@@ -896,7 +918,7 @@ public class MainActivity extends Activity {
         row.setBackground(roundedRect(COLOR_CARD, 12));
         row.setPadding(dp(16), dp(12), dp(16), dp(12));
 
-        View logoutIcon = circularIcon("🚪", Color.rgb(6, 95, 70), 32);
+        View logoutIcon = systemIcon(android.R.drawable.ic_lock_power_off, Color.rgb(6, 95, 70), 32, 8);
         row.addView(logoutIcon);
 
         TextView text = new TextView(this);
@@ -931,7 +953,7 @@ public class MainActivity extends Activity {
         row.setBackground(roundedRect(COLOR_CARD, 12));
         row.setPadding(dp(16), dp(12), dp(16), dp(12));
 
-        View infoIcon = circularIcon("ℹ️", Color.rgb(30, 58, 138), 32);
+        View infoIcon = systemIcon(android.R.drawable.ic_dialog_info, Color.rgb(30, 58, 138), 32, 8);
         row.addView(infoIcon);
 
         TextView text = new TextView(this);
@@ -953,7 +975,7 @@ public class MainActivity extends Activity {
         boolean serviceEnabled = isAccessibilityServiceEnabled();
         row.setBackground(roundedRectWithBorder(COLOR_CARD, 12, serviceEnabled ? COLOR_ACCENT : COLOR_DANGER, 1));
 
-        View statusIcon = circularIcon(serviceEnabled ? "🔓" : "🔒", serviceEnabled ? Color.rgb(6, 95, 70) : Color.rgb(153, 27, 27), 36);
+        View statusIcon = systemIcon(android.R.drawable.ic_lock_lock, serviceEnabled ? Color.rgb(6, 95, 70) : Color.rgb(153, 27, 27), 36, 8);
         row.addView(statusIcon);
 
         LinearLayout textSec = new LinearLayout(this);
@@ -988,7 +1010,7 @@ public class MainActivity extends Activity {
 
         android.widget.Switch toggle = new android.widget.Switch(this);
         toggle.setChecked(serviceEnabled);
-        toggle.setClickable(false); // Handle through row click
+        toggle.setClickable(false); // Handled through row click
         row.addView(toggle);
 
         row.setOnClickListener(v -> {
@@ -1011,7 +1033,7 @@ public class MainActivity extends Activity {
         openBtn.setPadding(dp(12), dp(14), dp(12), dp(14));
         openBtn.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
 
-        View gearIcon = circularIcon("⚙️", Color.rgb(30, 41, 59), 32);
+        View gearIcon = systemIcon(android.R.drawable.ic_menu_manage, Color.rgb(30, 41, 59), 32, 8);
         openBtn.addView(gearIcon);
 
         LinearLayout openTextSec = new LinearLayout(this);
@@ -1054,9 +1076,9 @@ public class MainActivity extends Activity {
         toggleBtn.setBackground(roundedRect(isEnabled ? COLOR_DANGER : COLOR_ACCENT, 12));
         toggleBtn.setPadding(dp(12), dp(14), dp(12), dp(14));
 
-        View playIcon = circularIcon(isEnabled ? "⏹️" : "▶️", Color.WHITE, 32);
-        if (playIcon instanceof TextView) {
-            ((TextView) playIcon).setTextColor(isEnabled ? COLOR_DANGER : COLOR_ACCENT);
+        View playIcon = systemIcon(isEnabled ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play, Color.WHITE, 32, 8);
+        if (playIcon instanceof android.widget.ImageView) {
+            ((android.widget.ImageView) playIcon).setColorFilter(isEnabled ? COLOR_DANGER : COLOR_ACCENT);
         }
         toggleBtn.addView(playIcon);
 
@@ -1108,10 +1130,7 @@ public class MainActivity extends Activity {
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(0, 0, 0, dp(12));
 
-        TextView icon = new TextView(this);
-        icon.setText("👤");
-        icon.setTextSize(16);
-        header.addView(icon);
+        header.addView(headerIcon(android.R.drawable.ic_menu_myplaces));
 
         TextView title = new TextView(this);
         title.setText("Select App Mode");
@@ -1137,12 +1156,9 @@ public class MainActivity extends Activity {
         rapidoOpt.setPadding(dp(12), dp(12), dp(12), dp(12));
         rapidoOpt.setBackground(roundedRectWithBorder(COLOR_INPUT_BG, 10, isRapidoSelected ? COLOR_ACCENT : Color.TRANSPARENT, 1));
         
-        TextView radioDot1 = new TextView(this);
-        radioDot1.setText(isRapidoSelected ? "🔘" : "⚪");
-        radioDot1.setTextSize(16);
-        rapidoOpt.addView(radioDot1);
+        rapidoOpt.addView(radioRing(isRapidoSelected));
 
-        View rapidoIcon = circularIcon("🏍️", Color.rgb(6, 95, 70), 28);
+        View rapidoIcon = systemIcon(android.R.drawable.ic_menu_directions, Color.rgb(6, 95, 70), 28, 6);
         LinearLayout.LayoutParams iconParams1 = new LinearLayout.LayoutParams(dp(28), dp(28));
         iconParams1.leftMargin = dp(8);
         rapidoIcon.setLayoutParams(iconParams1);
@@ -1183,12 +1199,9 @@ public class MainActivity extends Activity {
         customOpt.setPadding(dp(12), dp(12), dp(12), dp(12));
         customOpt.setBackground(roundedRectWithBorder(COLOR_INPUT_BG, 10, !isRapidoSelected ? COLOR_ACCENT : Color.TRANSPARENT, 1));
 
-        TextView radioDot2 = new TextView(this);
-        radioDot2.setText(!isRapidoSelected ? "🔘" : "⚪");
-        radioDot2.setTextSize(16);
-        customOpt.addView(radioDot2);
+        customOpt.addView(radioRing(!isRapidoSelected));
 
-        View customIcon = circularIcon("📱", Color.rgb(30, 41, 59), 28);
+        View customIcon = systemIcon(android.R.drawable.ic_menu_apps, Color.rgb(30, 41, 59), 28, 6);
         LinearLayout.LayoutParams iconParams2 = new LinearLayout.LayoutParams(dp(28), dp(28));
         iconParams2.leftMargin = dp(8);
         customIcon.setLayoutParams(iconParams2);
@@ -1226,13 +1239,13 @@ public class MainActivity extends Activity {
         return card;
     }
 
-    private View buildSettingRow(String title, String subtitle, EditText inputField, String emoji, int emojiBgColor) {
+    private View buildSettingRow(String title, String subtitle, EditText inputField, int drawableId, int emojiBgColor) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(0, dp(8), 0, dp(8));
 
-        View squareIcon = circularIcon(emoji, emojiBgColor, 36);
+        View squareIcon = systemIcon(drawableId, emojiBgColor, 36, 8);
         row.addView(squareIcon);
 
         LinearLayout textSec = new LinearLayout(this);
@@ -1279,10 +1292,7 @@ public class MainActivity extends Activity {
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(0, 0, 0, dp(12));
 
-        TextView icon = new TextView(this);
-        icon.setText("⚙️");
-        icon.setTextSize(16);
-        header.addView(icon);
+        header.addView(headerIcon(android.R.drawable.ic_menu_manage));
 
         TextView title = new TextView(this);
         title.setText("Distance Settings (km)");
@@ -1298,25 +1308,25 @@ public class MainActivity extends Activity {
         minPickupInput = new EditText(this);
         minPickupInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f)));
         minPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        card.addView(buildSettingRow("Minimum Pickup Distance", "Set the minimum distance (km)", minPickupInput, "📍", Color.rgb(109, 40, 217)));
+        card.addView(buildSettingRow("Minimum Pickup Distance", "Set the minimum distance (km)", minPickupInput, android.R.drawable.ic_menu_mylocation, Color.rgb(109, 40, 217)));
 
         // Row 2: Max Pickup
         maxPickupInput = new EditText(this);
         maxPickupInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f)));
         maxPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        card.addView(buildSettingRow("Maximum Pickup Distance", "Set the maximum distance (km)", maxPickupInput, "↗️", Color.rgb(29, 78, 216)));
+        card.addView(buildSettingRow("Maximum Pickup Distance", "Set the maximum distance (km)", maxPickupInput, android.R.drawable.ic_menu_compass, Color.rgb(29, 78, 216)));
 
         // Row 3: Min Drop
         minDropInput = new EditText(this);
         minDropInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f)));
         minDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        card.addView(buildSettingRow("Minimum Drop Distance", "Set the minimum drop distance (km)", minDropInput, "📥", Color.rgb(194, 65, 12)));
+        card.addView(buildSettingRow("Minimum Drop Distance", "Set the minimum drop distance (km)", minDropInput, android.R.drawable.ic_input_get, Color.rgb(194, 65, 12)));
 
         // Row 4: Max Drop
         maxDropInput = new EditText(this);
         maxDropInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f)));
         maxDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        card.addView(buildSettingRow("Maximum Drop Distance", "Set the maximum drop distance (km)", maxDropInput, "📤", Color.rgb(190, 24, 74)));
+        card.addView(buildSettingRow("Maximum Drop Distance", "Set the maximum drop distance (km)", maxDropInput, android.R.drawable.ic_menu_share, Color.rgb(190, 24, 74)));
 
         return card;
     }
@@ -1333,10 +1343,7 @@ public class MainActivity extends Activity {
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(0, 0, 0, dp(12));
 
-        TextView icon = new TextView(this);
-        icon.setText("⚙️");
-        icon.setTextSize(16);
-        header.addView(icon);
+        header.addView(headerIcon(android.R.drawable.ic_menu_manage));
 
         TextView title = new TextView(this);
         title.setText("Custom App Settings");
@@ -1353,14 +1360,14 @@ public class MainActivity extends Activity {
         customPackageInput.setText(prefs.getString(AcceptPrefs.KEY_CUSTOM_PACKAGE, ""));
         customPackageInput.setHint("com.example");
         customPackageInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        card.addView(buildSettingRow("App Package Name", "Package name of target app", customPackageInput, "📱", Color.rgb(29, 78, 216)));
+        card.addView(buildSettingRow("App Package Name", "Package name of target app", customPackageInput, android.R.drawable.ic_menu_apps, Color.rgb(29, 78, 216)));
 
         // Row 2: Custom Target Texts
         customTargetTextInput = new EditText(this);
         customTargetTextInput.setText(prefs.getString(AcceptPrefs.KEY_CUSTOM_TARGET_TEXT, "Accept"));
         customTargetTextInput.setHint("Accept,Click");
         customTargetTextInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        card.addView(buildSettingRow("Target Click Texts", "Comma-separated target values", customTargetTextInput, "✏️", Color.rgb(15, 118, 110)));
+        card.addView(buildSettingRow("Target Click Texts", "Comma-separated target values", customTargetTextInput, android.R.drawable.ic_menu_edit, Color.rgb(15, 118, 110)));
 
         return card;
     }
@@ -1595,6 +1602,72 @@ public class MainActivity extends Activity {
                 .setPositiveButton("OK", null)
                 .show();
         });
+
+        return card;
+    }
+
+    private View buildTargetedAppsCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(roundedRect(COLOR_CARD, 12));
+        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+
+        // Header
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(0, 0, 0, dp(12));
+
+        header.addView(headerIcon(android.R.drawable.ic_menu_myplaces));
+
+        TextView title = new TextView(this);
+        title.setText("Targeted Ride/Delivery Apps");
+        title.setTextColor(COLOR_TEXT_PRIMARY);
+        title.setTextSize(15);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setPadding(dp(8), 0, 0, 0);
+        header.addView(title);
+
+        card.addView(header);
+
+        // Checkbox 1: Rapido
+        CheckBox rapidoCb = new CheckBox(this);
+        rapidoCb.setText("Rapido Rider (com.rapido.rider)");
+        rapidoCb.setTextColor(COLOR_TEXT_PRIMARY);
+        rapidoCb.setTextSize(14);
+        rapidoCb.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        rapidoCb.setChecked(prefs.getBoolean("target_rapido", true));
+        rapidoCb.setPadding(dp(8), dp(8), dp(8), dp(8));
+        rapidoCb.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            prefs.edit().putBoolean("target_rapido", isChecked).apply();
+        });
+        card.addView(rapidoCb);
+
+        // Checkbox 2: Uber
+        CheckBox uberCb = new CheckBox(this);
+        uberCb.setText("Uber Driver (com.ubercab.driver)");
+        uberCb.setTextColor(COLOR_TEXT_PRIMARY);
+        uberCb.setTextSize(14);
+        uberCb.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        uberCb.setChecked(prefs.getBoolean("target_uber", true));
+        uberCb.setPadding(dp(8), dp(8), dp(8), dp(8));
+        uberCb.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            prefs.edit().putBoolean("target_uber", isChecked).apply();
+        });
+        card.addView(uberCb);
+
+        // Checkbox 3: Ola
+        CheckBox olaCb = new CheckBox(this);
+        olaCb.setText("Ola Driver (com.olacabs.oladriver)");
+        olaCb.setTextColor(COLOR_TEXT_PRIMARY);
+        olaCb.setTextSize(14);
+        olaCb.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        olaCb.setChecked(prefs.getBoolean("target_ola", true));
+        olaCb.setPadding(dp(8), dp(8), dp(8), dp(8));
+        olaCb.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            prefs.edit().putBoolean("target_ola", isChecked).apply();
+        });
+        card.addView(olaCb);
 
         return card;
     }

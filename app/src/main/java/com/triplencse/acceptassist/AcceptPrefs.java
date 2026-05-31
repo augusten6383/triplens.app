@@ -50,5 +50,12 @@ final class AcceptPrefs {
                     .putLong(KEY_SUB_EXPIRES, 0L)
                     .apply();
         }
+        if (!prefs.contains("target_rapido")) {
+            prefs.edit()
+                    .putBoolean("target_rapido", true)
+                    .putBoolean("target_uber", true)
+                    .putBoolean("target_ola", true)
+                    .apply();
+        }
     }
 }

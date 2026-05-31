@@ -105,28 +105,49 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return;
         }
 
-        String packageName = event.getPackageName().toString();
         String appMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
-        String targetPackage = "com.rapido.rider";
+        java.util.List<String> targetPackages = new java.util.ArrayList<>();
+
         if ("custom".equals(appMode)) {
-            targetPackage = prefs.getString(AcceptPrefs.KEY_CUSTOM_PACKAGE, "");
+            String customPkg = prefs.getString(AcceptPrefs.KEY_CUSTOM_PACKAGE, "");
+            if (!TextUtils.isEmpty(customPkg)) {
+                targetPackages.add(customPkg);
+            }
+        } else {
+            if (prefs.getBoolean("target_rapido", true)) {
+                targetPackages.add("com.rapido.rider");
+            }
+            if (prefs.getBoolean("target_uber", true)) {
+                targetPackages.add("com.ubercab.driver");
+            }
+            if (prefs.getBoolean("target_ola", true)) {
+                targetPackages.add("com.olacabs.oladriver");
+            }
         }
 
-        if (TextUtils.isEmpty(targetPackage)) {
+        if (targetPackages.isEmpty()) {
             return;
         }
 
+        String packageName = event.getPackageName().toString();
         boolean targetWindowFound = false;
-        if (packageName.equals(targetPackage)) {
+        String matchedPackage = "";
+
+        if (targetPackages.contains(packageName)) {
             targetWindowFound = true;
+            matchedPackage = packageName;
         } else {
             java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
             if (windows != null) {
                 for (android.view.accessibility.AccessibilityWindowInfo window : windows) {
                     AccessibilityNodeInfo root = window.getRoot();
-                    if (root != null && root.getPackageName() != null && targetPackage.equals(root.getPackageName().toString())) {
-                        targetWindowFound = true;
-                        break;
+                    if (root != null && root.getPackageName() != null) {
+                        String rootPkg = root.getPackageName().toString();
+                        if (targetPackages.contains(rootPkg)) {
+                            targetWindowFound = true;
+                            matchedPackage = rootPkg;
+                            break;
+                        }
                     }
                 }
             }
@@ -147,9 +168,9 @@ public class AcceptAccessibilityService extends AccessibilityService {
 
         // Remove any previously scheduled checks and reschedule for [delayMs] after the LATEST event
         handler.removeCallbacksAndMessages(null);
-        final String finalTargetPackage = targetPackage;
+        final String finalMatchedPackage = matchedPackage;
         handler.postDelayed(() -> {
-            clickIfMatched(finalTargetPackage);
+            clickIfMatched(finalMatchedPackage);
         }, delayMs);
     }
 
@@ -171,6 +192,14 @@ public class AcceptAccessibilityService extends AccessibilityService {
             targetText = prefs.getString(AcceptPrefs.KEY_CUSTOM_TARGET_TEXT, "Accept");
             if (TextUtils.isEmpty(targetText)) {
                 targetText = "Accept";
+            }
+        } else {
+            if ("com.ubercab.driver".equals(packageName)) {
+                targetText = "accept,match";
+            } else if ("com.olacabs.oladriver".equals(packageName)) {
+                targetText = "accept";
+            } else {
+                targetText = "Accept"; // com.rapido.rider or fallback
             }
         }
 
