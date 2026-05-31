@@ -210,27 +210,57 @@ public class AcceptAccessibilityService extends AccessibilityService {
     }
 
     private AccessibilityNodeInfo findClickableMatch(AccessibilityNodeInfo root, String targetText) {
-        AccessibilityNodeInfo direct = findMatch(root, targetText);
-        return direct == null ? null : nearestClickable(direct);
-    }
+        java.util.List<AccessibilityNodeInfo> matches = new java.util.ArrayList<>();
+        collectMatches(root, targetText, matches);
 
-    private AccessibilityNodeInfo findMatch(AccessibilityNodeInfo node, String targetText) {
-        if (node == null) {
-            return null;
-        }
+        if (matches.isEmpty()) return null;
 
-        if (isTarget(node, targetText)) {
-            return node;
-        }
-
-        for (int i = 0; i < node.getChildCount(); i++) {
-            AccessibilityNodeInfo child = node.getChild(i);
-            AccessibilityNodeInfo match = findMatch(child, targetText);
-            if (match != null) {
-                return match;
+        // Priority 1: Exact text match & Clickable
+        for (AccessibilityNodeInfo node : matches) {
+            AccessibilityNodeInfo clickable = nearestClickable(node);
+            if (clickable != null && clickable.isClickable()) {
+                if (isExactMatch(node, targetText)) return clickable;
             }
         }
-        return null;
+
+        // Priority 2: Contains text & Clickable
+        for (AccessibilityNodeInfo node : matches) {
+            AccessibilityNodeInfo clickable = nearestClickable(node);
+            if (clickable != null && clickable.isClickable()) {
+                return clickable;
+            }
+        }
+
+        // Priority 3: Exact match & Not clickable
+        for (AccessibilityNodeInfo node : matches) {
+            if (isExactMatch(node, targetText)) return node;
+        }
+
+        // Priority 4: Contains text & Not clickable
+        return matches.get(matches.size() - 1); // Get the deepest node
+    }
+
+    private void collectMatches(AccessibilityNodeInfo node, String targetText, java.util.List<AccessibilityNodeInfo> matches) {
+        if (node == null) return;
+        if (isTarget(node, targetText)) {
+            matches.add(node);
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            collectMatches(node.getChild(i), targetText, matches);
+        }
+    }
+
+    private boolean isExactMatch(AccessibilityNodeInfo node, String targetText) {
+        String text = asString(node.getText()).toLowerCase(Locale.ROOT).trim();
+        String desc = asString(node.getContentDescription()).toLowerCase(Locale.ROOT).trim();
+        String[] needles = targetText.toLowerCase(Locale.ROOT).split(",");
+        for (String needle : needles) {
+            String trimmed = needle.trim();
+            if (!trimmed.isEmpty() && (text.equals(trimmed) || desc.equals(trimmed))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isTarget(AccessibilityNodeInfo node, String targetText) {
