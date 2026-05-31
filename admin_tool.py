@@ -241,7 +241,7 @@ def main():
     url, token = get_credentials()
     
     while True:
-        print("Accept Assist Admin CRUD Utility")
+        print("Triplens Admin CRUD Utility")
         print("1. List Registered Users")
         print("2. Block User Account")
         print("3. Unblock User Account")

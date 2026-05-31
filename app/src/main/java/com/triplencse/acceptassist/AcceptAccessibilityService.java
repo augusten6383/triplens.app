@@ -58,7 +58,7 @@ public class AcceptAccessibilityService extends AccessibilityService {
         }
 
         Notification notification = builder
-                .setContentTitle("Accept Assist Running")
+                .setContentTitle("Triplens Running")
                 .setContentText("The accessibility service is active and running in the background.")
                 .setSmallIcon(android.R.drawable.ic_media_play)
                 .setOngoing(true)
@@ -298,7 +298,7 @@ public class AcceptAccessibilityService extends AccessibilityService {
         }
 
         AccessibilityNodeInfo node = targetNode;
-        uiHandler.post(() -> android.widget.Toast.makeText(this, "Accept Assist: Distance valid! Clicking...", android.widget.Toast.LENGTH_SHORT).show());
+        uiHandler.post(() -> android.widget.Toast.makeText(this, "Triplens: Distance valid! Clicking...", android.widget.Toast.LENGTH_SHORT).show());
 
 
 

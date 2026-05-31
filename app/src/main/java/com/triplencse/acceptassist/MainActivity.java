@@ -40,6 +40,17 @@ public class MainActivity extends Activity {
     private LinearLayout distanceFiltersContainer;
     private LinearLayout customAppContainer;
 
+    // Design Tokens - Premium Dark Theme
+    private static final int COLOR_BG = Color.rgb(15, 23, 30); // Deep background
+    private static final int COLOR_CARD = Color.rgb(26, 36, 47); // Card surface
+    private static final int COLOR_INPUT_BG = Color.rgb(33, 45, 59); // Input field background
+    private static final int COLOR_BORDER = Color.rgb(52, 70, 92); // Input border
+    private static final int COLOR_ACCENT = Color.rgb(16, 185, 129); // Vibrant emerald green
+    private static final int COLOR_TEXT_PRIMARY = Color.rgb(243, 244, 246); // Title / primary text
+    private static final int COLOR_TEXT_SECONDARY = Color.rgb(156, 163, 175); // Subtitles / secondary text
+    private static final int COLOR_DANGER = Color.rgb(239, 68, 68); // Soft red
+    private static final int COLOR_WARNING = Color.rgb(245, 158, 11); // Soft orange
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -89,7 +100,7 @@ public class MainActivity extends Activity {
 
         boolean dbInitialized = prefs.getBoolean("db_initialized", false);
         if (!dbInitialized) {
-            setContentView(buildLoadingView("Connecting to remote database..."));
+            setContentView(buildLoadingView("Connecting to database..."));
             TursoHelper.initDatabase(this, new TursoHelper.Callback() {
                 @Override
                 public void onSuccess(org.json.JSONArray rows) {
@@ -175,25 +186,108 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Dynamic UI Styling Helpers
+    private android.graphics.drawable.GradientDrawable roundedRect(int color, float radiusDp) {
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        shape.setColor(color);
+        shape.setCornerRadius(dp((int) radiusDp));
+        return shape;
+    }
+
+    private android.graphics.drawable.GradientDrawable roundedRectWithBorder(int color, float radiusDp, int strokeColor, int strokeWidthDp) {
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        shape.setColor(color);
+        shape.setCornerRadius(dp((int) radiusDp));
+        shape.setStroke(dp(strokeWidthDp), strokeColor);
+        return shape;
+    }
+
+    private Button primaryButton(String text) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setAllCaps(false);
+        button.setGravity(Gravity.CENTER);
+        button.setTextColor(Color.WHITE);
+        button.setTextSize(16);
+        button.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        button.setBackground(roundedRect(COLOR_ACCENT, 10));
+        button.setPadding(dp(16), dp(12), dp(16), dp(12));
+        return button;
+    }
+
+    private Button secondaryButton(String text) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setAllCaps(false);
+        button.setGravity(Gravity.CENTER);
+        button.setTextColor(COLOR_TEXT_PRIMARY);
+        button.setTextSize(14);
+        button.setBackground(roundedRect(COLOR_INPUT_BG, 8));
+        button.setPadding(dp(12), dp(8), dp(12), dp(8));
+        return button;
+    }
+
+    private Button textLinkButton(String text) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setAllCaps(false);
+        button.setGravity(Gravity.CENTER);
+        button.setTextColor(COLOR_ACCENT);
+        button.setTextSize(14);
+        button.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        button.setBackgroundColor(Color.TRANSPARENT);
+        button.setPadding(dp(8), dp(8), dp(8), dp(8));
+        return button;
+    }
+
+    private TextView label(String text) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextColor(COLOR_TEXT_PRIMARY);
+        view.setTextSize(14);
+        view.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        return view;
+    }
+
+    private EditText input(String value) {
+        EditText editText = new EditText(this);
+        editText.setText(value);
+        editText.setTextSize(15);
+        editText.setTextColor(COLOR_TEXT_PRIMARY);
+        editText.setHintTextColor(COLOR_TEXT_SECONDARY);
+        editText.setBackground(roundedRectWithBorder(COLOR_INPUT_BG, 8, COLOR_BORDER, 1));
+        editText.setPadding(dp(14), dp(12), dp(14), dp(12));
+        return editText;
+    }
+
+    private String formatExpiry(long timestampSec) {
+        if (timestampSec <= 0) return "No active subscription";
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault());
+        return sdf.format(new java.util.Date(timestampSec * 1000L));
+    }
+
+    // View builders
     private View buildLoadingView(String message) {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
-        root.setPadding(dp(20), dp(20), dp(20), dp(20));
-        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        root.setPadding(dp(24), dp(24), dp(24), dp(24));
+        root.setBackgroundColor(COLOR_BG);
 
         TextView title = new TextView(this);
-        title.setText("Accept Assist");
-        title.setTextColor(Color.rgb(18, 23, 23));
-        title.setTextSize(30);
+        title.setText("Triplens");
+        title.setTextColor(COLOR_TEXT_PRIMARY);
+        title.setTextSize(34);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         title.setGravity(Gravity.CENTER);
         root.addView(title, matchWrap());
 
         TextView desc = new TextView(this);
         desc.setText(message);
-        desc.setTextColor(Color.rgb(81, 89, 88));
-        desc.setTextSize(15);
+        desc.setTextColor(COLOR_TEXT_SECONDARY);
+        desc.setTextSize(16);
         desc.setGravity(Gravity.CENTER);
         desc.setPadding(0, dp(12), 0, dp(24));
         root.addView(desc, matchWrap());
@@ -213,21 +307,21 @@ public class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
-        root.setPadding(dp(20), dp(20), dp(20), dp(20));
-        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        root.setPadding(dp(24), dp(24), dp(24), dp(24));
+        root.setBackgroundColor(COLOR_BG);
 
         TextView title = new TextView(this);
         title.setText("Connection Error");
-        title.setTextColor(Color.rgb(200, 50, 50));
-        title.setTextSize(24);
+        title.setTextColor(COLOR_DANGER);
+        title.setTextSize(26);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         title.setGravity(Gravity.CENTER);
         root.addView(title, matchWrap());
 
         TextView desc = new TextView(this);
         desc.setText(errorMessage);
-        desc.setTextColor(Color.rgb(81, 89, 88));
-        desc.setTextSize(14);
+        desc.setTextColor(COLOR_TEXT_SECONDARY);
+        desc.setTextSize(15);
         desc.setGravity(Gravity.CENTER);
         desc.setPadding(0, dp(12), 0, dp(24));
         root.addView(desc, matchWrap());
@@ -235,8 +329,6 @@ public class MainActivity extends Activity {
         Button retryBtn = primaryButton("Retry Connection");
         retryBtn.setOnClickListener(v -> navigateToScreen());
         root.addView(retryBtn, matchWrapWithTop(12));
-
-
 
         return root;
     }
@@ -248,19 +340,19 @@ public class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(30), dp(20), dp(30));
-        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        root.setBackgroundColor(COLOR_BG);
         scrollView.addView(root);
 
         TextView title = new TextView(this);
         title.setText("Database Configuration");
-        title.setTextColor(Color.rgb(18, 23, 23));
+        title.setTextColor(COLOR_TEXT_PRIMARY);
         title.setTextSize(26);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         root.addView(title, matchWrap());
 
         TextView desc = new TextView(this);
-        desc.setText("Connect Accept Assist to your remote Turso / libSQL database.");
-        desc.setTextColor(Color.rgb(81, 89, 88));
+        desc.setText("Connect Triplens to your remote Turso / libSQL database.");
+        desc.setTextColor(COLOR_TEXT_SECONDARY);
         desc.setTextSize(14);
         desc.setPadding(0, dp(6), 0, dp(24));
         root.addView(desc, matchWrap());
@@ -315,24 +407,25 @@ public class MainActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(35), dp(20), dp(35));
-        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        root.setPadding(dp(24), dp(40), dp(24), dp(40));
+        root.setBackgroundColor(COLOR_BG);
+        root.setGravity(Gravity.CENTER_VERTICAL);
         scrollView.addView(root);
 
         TextView title = new TextView(this);
-        title.setText("Accept Assist");
-        title.setTextColor(Color.rgb(18, 23, 23));
-        title.setTextSize(30);
+        title.setText("Triplens");
+        title.setTextColor(COLOR_TEXT_PRIMARY);
+        title.setTextSize(40);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         title.setGravity(Gravity.CENTER);
         root.addView(title, matchWrap());
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Enter credentials to access auto-clicker settings");
-        subtitle.setTextColor(Color.rgb(81, 89, 88));
-        subtitle.setTextSize(14);
+        subtitle.setText("Enter credentials to access settings");
+        subtitle.setTextColor(COLOR_TEXT_SECONDARY);
+        subtitle.setTextSize(15);
         subtitle.setGravity(Gravity.CENTER);
-        subtitle.setPadding(0, dp(4), 0, dp(30));
+        subtitle.setPadding(0, dp(6), 0, dp(36));
         root.addView(subtitle, matchWrap());
 
         root.addView(label("Username or Email"), matchWrap());
@@ -340,7 +433,7 @@ public class MainActivity extends Activity {
         loginInput.setHint("Enter username or email");
         root.addView(loginInput, matchWrapWithTop(6));
 
-        root.addView(label("Password"), matchWrapWithTop(16));
+        root.addView(label("Password"), matchWrapWithTop(18));
         EditText passInput = input("");
         passInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         passInput.setHint("••••••••");
@@ -376,17 +469,15 @@ public class MainActivity extends Activity {
                 }
             });
         });
-        root.addView(loginBtn, matchWrapWithTop(24));
+        root.addView(loginBtn, matchWrapWithTop(28));
 
-        Button signUpLink = secondaryButton("Create New Account");
+        Button signUpLink = textLinkButton("Create New Account");
         signUpLink.setOnClickListener(v -> setContentView(buildSignUpView()));
-        root.addView(signUpLink, matchWrapWithTop(12));
+        root.addView(signUpLink, matchWrapWithTop(16));
 
-        Button forgotLink = secondaryButton("Forgot Password?");
+        Button forgotLink = textLinkButton("Forgot Password?");
         forgotLink.setOnClickListener(v -> setContentView(buildRecoveryView()));
-        root.addView(forgotLink, matchWrapWithTop(6));
-
-
+        root.addView(forgotLink, matchWrapWithTop(8));
 
         return scrollView;
     }
@@ -397,22 +488,22 @@ public class MainActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(25), dp(20), dp(25));
-        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        root.setPadding(dp(24), dp(30), dp(24), dp(30));
+        root.setBackgroundColor(COLOR_BG);
         scrollView.addView(root);
 
         TextView title = new TextView(this);
         title.setText("Create Account");
-        title.setTextColor(Color.rgb(18, 23, 23));
-        title.setTextSize(26);
+        title.setTextColor(COLOR_TEXT_PRIMARY);
+        title.setTextSize(30);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         root.addView(title, matchWrap());
 
         TextView desc = new TextView(this);
         desc.setText("Please register with unique details to continue");
-        desc.setTextColor(Color.rgb(81, 89, 88));
+        desc.setTextColor(COLOR_TEXT_SECONDARY);
         desc.setTextSize(14);
-        desc.setPadding(0, dp(4), 0, dp(20));
+        desc.setPadding(0, dp(4), 0, dp(24));
         root.addView(desc, matchWrap());
 
         root.addView(label("Username"), matchWrap());
@@ -484,11 +575,11 @@ public class MainActivity extends Activity {
                 }
             });
         });
-        root.addView(registerBtn, matchWrapWithTop(24));
+        root.addView(registerBtn, matchWrapWithTop(28));
 
-        Button backBtn = secondaryButton("Back to Log In");
+        Button backBtn = textLinkButton("Back to Log In");
         backBtn.setOnClickListener(v -> setContentView(buildLoginView()));
-        root.addView(backBtn, matchWrapWithTop(12));
+        root.addView(backBtn, matchWrapWithTop(16));
 
         return scrollView;
     }
@@ -499,22 +590,22 @@ public class MainActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(30), dp(20), dp(30));
-        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        root.setPadding(dp(24), dp(30), dp(24), dp(30));
+        root.setBackgroundColor(COLOR_BG);
         scrollView.addView(root);
 
         TextView title = new TextView(this);
         title.setText("Recover Password");
-        title.setTextColor(Color.rgb(18, 23, 23));
-        title.setTextSize(26);
+        title.setTextColor(COLOR_TEXT_PRIMARY);
+        title.setTextSize(30);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         root.addView(title, matchWrap());
 
         TextView desc = new TextView(this);
         desc.setText("Verify your details to reset your password");
-        desc.setTextColor(Color.rgb(81, 89, 88));
+        desc.setTextColor(COLOR_TEXT_SECONDARY);
         desc.setTextSize(14);
-        desc.setPadding(0, dp(4), 0, dp(20));
+        desc.setPadding(0, dp(4), 0, dp(24));
         root.addView(desc, matchWrap());
 
         root.addView(label("Username or Email"), matchWrap());
@@ -527,9 +618,11 @@ public class MainActivity extends Activity {
         step2Container.setVisibility(View.GONE);
 
         TextView questionText = new TextView(this);
-        questionText.setTextSize(15);
-        questionText.setTextColor(Color.rgb(0, 106, 86));
+        questionText.setTextSize(16);
+        questionText.setTextColor(COLOR_ACCENT);
         questionText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        questionText.setPadding(dp(12), dp(10), dp(12), dp(10));
+        questionText.setBackground(roundedRect(COLOR_INPUT_BG, 8));
         
         step2Container.addView(label("Your Security Question:"), matchWrapWithTop(16));
         step2Container.addView(questionText, matchWrapWithTop(6));
@@ -611,11 +704,11 @@ public class MainActivity extends Activity {
                 }
             });
         });
-        step2Container.addView(resetBtn, matchWrapWithTop(24));
+        step2Container.addView(resetBtn, matchWrapWithTop(28));
 
-        Button backBtn = secondaryButton("Back to Log In");
+        Button backBtn = textLinkButton("Back to Log In");
         backBtn.setOnClickListener(v -> setContentView(buildLoginView()));
-        root.addView(backBtn, matchWrapWithTop(12));
+        root.addView(backBtn, matchWrapWithTop(16));
 
         return scrollView;
     }
@@ -626,24 +719,23 @@ public class MainActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(22), dp(20), dp(22));
-        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        root.setPadding(dp(20), dp(24), dp(20), dp(24));
+        root.setBackgroundColor(COLOR_BG);
         scrollView.addView(root);
 
         TextView title = new TextView(this);
-        title.setText("Accept Assist");
-        title.setTextColor(Color.rgb(18, 23, 23));
-        title.setTextSize(28);
+        title.setText("Triplens");
+        title.setTextColor(COLOR_TEXT_PRIMARY);
+        title.setTextSize(32);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         root.addView(title, matchWrap());
 
         String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "User");
         TextView userSessionText = new TextView(this);
         userSessionText.setText("Logged in as: " + loggedInUser);
-        userSessionText.setTextColor(Color.rgb(0, 106, 86));
+        userSessionText.setTextColor(COLOR_TEXT_SECONDARY);
         userSessionText.setTextSize(14);
-        userSessionText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        userSessionText.setPadding(0, dp(4), 0, dp(4));
+        userSessionText.setPadding(0, dp(2), 0, dp(2));
         root.addView(userSessionText, matchWrap());
 
         long subExpires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
@@ -653,21 +745,21 @@ public class MainActivity extends Activity {
         TextView subStatusIndicator = new TextView(this);
         subStatusIndicator.setTextSize(14);
         subStatusIndicator.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        subStatusIndicator.setPadding(0, dp(2), 0, dp(8));
+        subStatusIndicator.setPadding(0, dp(2), 0, dp(14));
 
         if (isSubscribed) {
             subStatusIndicator.setText("Subscription: Active (Expires: " + formatExpiry(subExpires) + ")");
-            subStatusIndicator.setTextColor(Color.rgb(0, 120, 80));
+            subStatusIndicator.setTextColor(COLOR_ACCENT);
         } else if (freeClicks > 0) {
             subStatusIndicator.setText("Subscription: Trial (" + freeClicks + " Free Click" + (freeClicks > 1 ? "s" : "") + " remaining)");
-            subStatusIndicator.setTextColor(Color.rgb(180, 100, 0));
+            subStatusIndicator.setTextColor(COLOR_WARNING);
         } else {
             subStatusIndicator.setText("Subscription: Expired");
-            subStatusIndicator.setTextColor(Color.rgb(200, 50, 50));
+            subStatusIndicator.setTextColor(COLOR_DANGER);
         }
         root.addView(subStatusIndicator, matchWrap());
 
-        Button logoutBtn = secondaryButton("Log Out");
+        Button logoutBtn = textLinkButton("Log Out");
         logoutBtn.setOnClickListener(v -> {
             prefs.edit().putString(AcceptPrefs.KEY_LOGGED_IN_USER, "").apply();
             Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show();
@@ -677,47 +769,55 @@ public class MainActivity extends Activity {
 
         TextView subtitle = new TextView(this);
         subtitle.setText("Auto-clicks a matching button inside your configured custom app.");
-        subtitle.setTextColor(Color.rgb(81, 89, 88));
-        subtitle.setTextSize(15);
-        subtitle.setPadding(0, dp(6), 0, dp(14));
+        subtitle.setTextColor(COLOR_TEXT_SECONDARY);
+        subtitle.setTextSize(14);
+        subtitle.setPadding(0, dp(12), 0, dp(16));
         root.addView(subtitle, matchWrap());
 
         serviceStatus = statusText();
-        root.addView(serviceStatus, matchWrap());
+        serviceStatus.setGravity(Gravity.CENTER);
+        serviceStatus.setTextSize(15);
+        serviceStatus.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        serviceStatus.setPadding(dp(16), dp(12), dp(16), dp(12));
+        root.addView(serviceStatus, matchWrapWithTop(8));
 
-        Button accessibility = primaryButton("Open accessibility settings");
+        Button accessibility = primaryButton("Open Accessibility Settings");
         accessibility.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
-        root.addView(accessibility, matchWrapWithTop(14));
+        root.addView(accessibility, matchWrapWithTop(16));
 
         Button toggleServiceBtn = new Button(this);
         boolean isEnabled = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
         toggleServiceBtn.setText(isEnabled ? "Stop Auto-Clicker" : "Start Auto-Clicker");
-        toggleServiceBtn.setBackgroundColor(isEnabled ? Color.rgb(200, 50, 50) : Color.rgb(11, 122, 117));
+        toggleServiceBtn.setBackground(roundedRect(isEnabled ? COLOR_DANGER : COLOR_ACCENT, 10));
         toggleServiceBtn.setTextColor(Color.WHITE);
         toggleServiceBtn.setTextSize(18);
+        toggleServiceBtn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         toggleServiceBtn.setPadding(0, dp(16), 0, dp(16));
         toggleServiceBtn.setOnClickListener(v -> {
             boolean current = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
             boolean next = !current;
             prefs.edit().putBoolean(AcceptPrefs.KEY_ENABLED, next).apply();
             toggleServiceBtn.setText(next ? "Stop Auto-Clicker" : "Start Auto-Clicker");
-            toggleServiceBtn.setBackgroundColor(next ? Color.rgb(200, 50, 50) : Color.rgb(11, 122, 117));
+            toggleServiceBtn.setBackground(roundedRect(next ? COLOR_DANGER : COLOR_ACCENT, 10));
             Toast.makeText(this, next ? "Auto-Clicker Started" : "Auto-Clicker Stopped", Toast.LENGTH_SHORT).show();
         });
-        root.addView(toggleServiceBtn, matchWrapWithTop(18));
+        root.addView(toggleServiceBtn, matchWrapWithTop(20));
 
-        root.addView(label("Select App Mode"), matchWrapWithTop(18));
+        root.addView(label("Select App Mode"), matchWrapWithTop(24));
         
         appModeGroup = new RadioGroup(this);
         appModeGroup.setOrientation(RadioGroup.VERTICAL);
+        appModeGroup.setPadding(dp(8), dp(8), dp(8), dp(8));
         
         radioRapido = new RadioButton(this);
         radioRapido.setText("Default App (Rapido Rider)");
         radioRapido.setTextSize(15);
+        radioRapido.setTextColor(COLOR_TEXT_PRIMARY);
         
         radioCustom = new RadioButton(this);
         radioCustom.setText("Other Apps");
         radioCustom.setTextSize(15);
+        radioCustom.setTextColor(COLOR_TEXT_PRIMARY);
         
         appModeGroup.addView(radioRapido);
         appModeGroup.addView(radioCustom);
@@ -732,8 +832,10 @@ public class MainActivity extends Activity {
 
         distanceFiltersContainer = new LinearLayout(this);
         distanceFiltersContainer.setOrientation(LinearLayout.VERTICAL);
+        distanceFiltersContainer.setBackground(roundedRect(COLOR_CARD, 12));
+        distanceFiltersContainer.setPadding(dp(16), dp(16), dp(16), dp(16));
 
-        distanceFiltersContainer.addView(label("Minimum Pickup Distance (km)"), matchWrapWithTop(14));
+        distanceFiltersContainer.addView(label("Minimum Pickup Distance (km)"), matchWrap());
         minPickupInput = input(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f)));
         minPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         distanceFiltersContainer.addView(minPickupInput, matchWrapWithTop(6));
@@ -753,12 +855,14 @@ public class MainActivity extends Activity {
         maxDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         distanceFiltersContainer.addView(maxDropInput, matchWrapWithTop(6));
 
-        root.addView(distanceFiltersContainer, matchWrap());
+        root.addView(distanceFiltersContainer, matchWrapWithTop(16));
 
         customAppContainer = new LinearLayout(this);
         customAppContainer.setOrientation(LinearLayout.VERTICAL);
+        customAppContainer.setBackground(roundedRect(COLOR_CARD, 12));
+        customAppContainer.setPadding(dp(16), dp(16), dp(16), dp(16));
 
-        customAppContainer.addView(label("Custom App Package Name"), matchWrapWithTop(14));
+        customAppContainer.addView(label("Custom App Package Name"), matchWrap());
         customPackageInput = input(prefs.getString(AcceptPrefs.KEY_CUSTOM_PACKAGE, ""));
         customPackageInput.setInputType(InputType.TYPE_CLASS_TEXT);
         customPackageInput.setHint("e.g. com.example.rider");
@@ -770,7 +874,7 @@ public class MainActivity extends Activity {
         customTargetTextInput.setHint("e.g. Accept,Click here,Go");
         customAppContainer.addView(customTargetTextInput, matchWrapWithTop(6));
 
-        root.addView(customAppContainer, matchWrap());
+        root.addView(customAppContainer, matchWrapWithTop(16));
 
         if ("custom".equals(currentMode)) {
             distanceFiltersContainer.setVisibility(View.GONE);
@@ -794,15 +898,13 @@ public class MainActivity extends Activity {
             }
         });
 
-        Button save = primaryButton("Save settings");
+        Button save = primaryButton("Save Settings");
         save.setOnClickListener(v -> saveSettings());
-        root.addView(save, matchWrapWithTop(16));
-
-
+        root.addView(save, matchWrapWithTop(24));
 
         TextView footer = new TextView(this);
-        footer.setText("Auto-accepting for configured package. Distance limits are used only in default mode.");
-        footer.setTextColor(Color.rgb(92, 101, 100));
+        footer.setText("Auto-clicking for configured package. Distance limits are used only in default mode.");
+        footer.setTextColor(COLOR_TEXT_SECONDARY);
         footer.setTextSize(13);
         footer.setPadding(0, dp(18), 0, 0);
         root.addView(footer, matchWrap());
@@ -843,8 +945,9 @@ public class MainActivity extends Activity {
 
     private void refreshStatus() {
         boolean serviceEnabled = isAccessibilityServiceEnabled();
-        serviceStatus.setText(serviceEnabled ? "Accessibility service: enabled" : "Accessibility service: not enabled");
-        serviceStatus.setTextColor(serviceEnabled ? Color.rgb(0, 106, 86) : Color.rgb(155, 72, 36));
+        serviceStatus.setText(serviceEnabled ? "Accessibility Service: ACTIVE" : "Accessibility Service: DISABLED");
+        serviceStatus.setTextColor(Color.WHITE);
+        serviceStatus.setBackground(roundedRect(serviceEnabled ? Color.rgb(6, 95, 70) : Color.rgb(153, 27, 27), 8));
     }
 
     private boolean isAccessibilityServiceEnabled() {
@@ -857,40 +960,6 @@ public class MainActivity extends Activity {
         view.setTextSize(15);
         view.setPadding(0, dp(3), 0, dp(3));
         return view;
-    }
-
-    private TextView label(String text) {
-        TextView view = new TextView(this);
-        view.setText(text);
-        view.setTextColor(Color.rgb(31, 38, 38));
-        view.setTextSize(14);
-        view.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        return view;
-    }
-
-    private EditText input(String value) {
-        EditText editText = new EditText(this);
-        editText.setText(value);
-        editText.setTextSize(15);
-        editText.setPadding(dp(12), dp(8), dp(12), dp(8));
-        return editText;
-    }
-
-    private Button primaryButton(String text) {
-        Button button = new Button(this);
-        button.setText(text);
-        button.setAllCaps(false);
-        button.setGravity(Gravity.CENTER);
-        button.setTextColor(Color.WHITE);
-        button.setBackgroundColor(Color.rgb(11, 122, 117));
-        return button;
-    }
-
-    private Button secondaryButton(String text) {
-        Button button = new Button(this);
-        button.setText(text);
-        button.setAllCaps(false);
-        return button;
     }
 
     private LinearLayout.LayoutParams matchWrap() {
@@ -907,22 +976,16 @@ public class MainActivity extends Activity {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
-    private String formatExpiry(long timestampSec) {
-        if (timestampSec <= 0) return "No active subscription";
-        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault());
-        return sdf.format(new java.util.Date(timestampSec * 1000L));
-    }
-
     private View buildBlockedView() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
         root.setPadding(dp(24), dp(24), dp(24), dp(24));
-        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        root.setBackgroundColor(COLOR_BG);
 
         TextView title = new TextView(this);
         title.setText("Account Blocked");
-        title.setTextColor(Color.rgb(200, 50, 50));
+        title.setTextColor(COLOR_DANGER);
         title.setTextSize(28);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         title.setGravity(Gravity.CENTER);
@@ -930,7 +993,7 @@ public class MainActivity extends Activity {
 
         TextView desc = new TextView(this);
         desc.setText("Your account has been suspended or blocked by the administrator. Please contact support if you believe this is a mistake.");
-        desc.setTextColor(Color.rgb(81, 89, 88));
+        desc.setTextColor(COLOR_TEXT_SECONDARY);
         desc.setTextSize(16);
         desc.setGravity(Gravity.CENTER);
         desc.setPadding(0, dp(16), 0, dp(32));
@@ -953,12 +1016,12 @@ public class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(24), dp(20), dp(24));
-        root.setBackgroundColor(Color.rgb(245, 247, 246));
+        root.setBackgroundColor(COLOR_BG);
         scrollView.addView(root);
 
         TextView title = new TextView(this);
         title.setText("Premium Required");
-        title.setTextColor(Color.rgb(18, 23, 23));
+        title.setTextColor(COLOR_TEXT_PRIMARY);
         title.setTextSize(28);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         title.setGravity(Gravity.CENTER);
@@ -967,9 +1030,8 @@ public class MainActivity extends Activity {
         String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "User");
         TextView userSessionText = new TextView(this);
         userSessionText.setText("Logged in as: " + loggedInUser);
-        userSessionText.setTextColor(Color.rgb(0, 106, 86));
+        userSessionText.setTextColor(COLOR_TEXT_SECONDARY);
         userSessionText.setTextSize(14);
-        userSessionText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         userSessionText.setGravity(Gravity.CENTER);
         userSessionText.setPadding(0, dp(4), 0, dp(12));
         root.addView(userSessionText, matchWrap());
@@ -977,11 +1039,11 @@ public class MainActivity extends Activity {
         int freeClicks = prefs.getInt(AcceptPrefs.KEY_FREE_CLICKS, 0);
         TextView trialStatusText = new TextView(this);
         if (freeClicks > 0) {
-            trialStatusText.setText("Trial status: " + freeClicks + " free click" + (freeClicks > 1 ? "s" : "") + " remaining");
-            trialStatusText.setTextColor(Color.rgb(0, 106, 86));
+            trialStatusText.setText("Trial Status: " + freeClicks + " free click" + (freeClicks > 1 ? "s" : "") + " remaining");
+            trialStatusText.setTextColor(COLOR_ACCENT);
         } else {
-            trialStatusText.setText("Trial status: Free clicks exhausted");
-            trialStatusText.setTextColor(Color.rgb(200, 50, 50));
+            trialStatusText.setText("Trial Status: Free clicks exhausted");
+            trialStatusText.setTextColor(COLOR_DANGER);
         }
         trialStatusText.setTextSize(15);
         trialStatusText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -992,6 +1054,7 @@ public class MainActivity extends Activity {
         // Plans Section
         TextView plansHeader = label("Available Subscription Plans");
         plansHeader.setGravity(Gravity.CENTER);
+        plansHeader.setPadding(0, 0, 0, dp(10));
         root.addView(plansHeader, matchWrap());
 
         // Card 1: 20 / Day
@@ -1006,9 +1069,12 @@ public class MainActivity extends Activity {
         // Demo Activation Button
         Button demoBtn = new Button(this);
         demoBtn.setText("Demo: Activate Trial (Add 1 Day Premium)");
-        demoBtn.setBackgroundColor(Color.rgb(0, 106, 86));
+        demoBtn.setBackground(roundedRect(COLOR_ACCENT, 10));
         demoBtn.setTextColor(Color.WHITE);
         demoBtn.setAllCaps(false);
+        demoBtn.setTextSize(16);
+        demoBtn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        demoBtn.setPadding(0, dp(14), 0, dp(14));
         demoBtn.setOnClickListener(v -> {
             Toast.makeText(this, "Activating 1-day demo subscription...", Toast.LENGTH_SHORT).show();
             TursoHelper.demoActivateSubscription(this, loggedInUser, 1, new TursoHelper.Callback() {
@@ -1026,12 +1092,12 @@ public class MainActivity extends Activity {
         });
         root.addView(demoBtn, matchWrapWithTop(28));
 
-        Button logoutBtn = secondaryButton("Log Out");
+        Button logoutBtn = textLinkButton("Log Out");
         logoutBtn.setOnClickListener(v -> {
             prefs.edit().putString(AcceptPrefs.KEY_LOGGED_IN_USER, "").apply();
             navigateToScreen();
         });
-        root.addView(logoutBtn, matchWrapWithTop(12));
+        root.addView(logoutBtn, matchWrapWithTop(16));
 
         return scrollView;
     }
@@ -1039,25 +1105,25 @@ public class MainActivity extends Activity {
     private View buildPlanCard(String name, String price, String desc) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(16), dp(12), dp(16), dp(12));
-        card.setBackgroundColor(Color.WHITE);
+        card.setPadding(dp(18), dp(16), dp(18), dp(16));
+        card.setBackground(roundedRectWithBorder(COLOR_CARD, 12, COLOR_BORDER, 1));
         
         TextView nameTxt = new TextView(this);
         nameTxt.setText(name);
         nameTxt.setTextSize(16);
-        nameTxt.setTextColor(Color.rgb(18, 23, 23));
+        nameTxt.setTextColor(COLOR_TEXT_PRIMARY);
         nameTxt.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         
         TextView priceTxt = new TextView(this);
         priceTxt.setText(price);
         priceTxt.setTextSize(18);
-        priceTxt.setTextColor(Color.rgb(0, 106, 86));
+        priceTxt.setTextColor(COLOR_ACCENT);
         priceTxt.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
 
         TextView descTxt = new TextView(this);
         descTxt.setText(desc);
         descTxt.setTextSize(13);
-        descTxt.setTextColor(Color.rgb(120, 120, 120));
+        descTxt.setTextColor(COLOR_TEXT_SECONDARY);
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
@@ -1067,7 +1133,7 @@ public class MainActivity extends Activity {
         header.addView(priceTxt);
 
         card.addView(header, matchWrap());
-        card.addView(descTxt, matchWrapWithTop(4));
+        card.addView(descTxt, matchWrapWithTop(6));
 
         card.setOnClickListener(v -> {
             new AlertDialog.Builder(this)

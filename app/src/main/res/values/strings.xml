@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Accept Assist</string>
-    <string name="accessibility_service_name">Accept Assist Clicker</string>
-    <string name="accessibility_service_description">Clicks a matching Accept button only inside the package you configure.</string>
+    <string name="app_name">Triplens</string>
+    <string name="accessibility_service_name">Triplens Clicker</string>
+    <string name="accessibility_service_description">Clicks a matching button only inside the package you configure.</string>
 </resources>
