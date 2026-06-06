@@ -2,6 +2,7 @@ package com.triplencse.acceptassist;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
+import android.accessibilityservice.GestureDescription; // <-- THIS WAS MISSING
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -25,6 +26,7 @@ import java.util.regex.Pattern;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+
 
 public class AcceptAccessibilityService extends AccessibilityService {
     private static final long CLICK_COOLDOWN_MS = 650;
