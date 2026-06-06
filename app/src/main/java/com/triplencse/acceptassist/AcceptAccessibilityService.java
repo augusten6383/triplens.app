@@ -165,7 +165,8 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return;
         }
 
-        int delayMs = 50; // Delay before scanning configuration
+        // INCREASED DELAY: Uber has massive UI animations. We must wait for the card to settle.
+        int delayMs = 250; 
 
         handler.removeCallbacksAndMessages(null);
         final String finalMatchedPackage = matchedPackage;
@@ -192,9 +193,9 @@ public class AcceptAccessibilityService extends AccessibilityService {
             }
         } else {
             if ("com.ubercab.driver".equals(packageName)) {
-                targetText = "accept,match"; // Accurately matches either visual iteration on Uber
+                targetText = "accept,match"; 
             } else {
-                targetText = "Accept"; // com.rapido.rider default layout
+                targetText = "Accept"; 
             }
         }
 
@@ -205,17 +206,15 @@ public class AcceptAccessibilityService extends AccessibilityService {
         for (AccessibilityWindowInfo window : windows) {
             AccessibilityNodeInfo root = window.getRoot();
             if (root != null && root.getPackageName() != null && packageName.equals(root.getPackageName().toString())) {
-                activeWindowRoot = root; // Keep track of root as absolute backup text source
+                activeWindowRoot = root; 
                 List<AccessibilityNodeInfo> matches = new ArrayList<>();
                 collectMatches(root, targetText, matches);
                 
                 for (AccessibilityNodeInfo match : matches) {
-                    AccessibilityNodeInfo clickable = nearestClickable(match);
-                    // Using isTarget instead of isExactMatch to catch dynamic Uber variations
-                    if (clickable != null && clickable.isClickable() && isTarget(match, targetText)) {
-                        if (!allButtons.contains(clickable)) {
-                            allButtons.add(clickable);
-                        }
+                    // AGGRESSIVE TARGETING: We no longer care if Android thinks it is isClickable(). 
+                    // If the node contains our text, we add it and force a hardware gesture on its coordinates.
+                    if (!allButtons.contains(match)) {
+                        allButtons.add(match);
                     }
                 }
             }
@@ -240,27 +239,22 @@ public class AcceptAccessibilityService extends AccessibilityService {
             for (AccessibilityNodeInfo button : allButtons) {
                 StringBuilder cardText = new StringBuilder();
                 
-                // Dynamic climbing loop to extract context securely
                 AccessibilityNodeInfo currentParent = button.getParent();
                 int levelsClimbed = 0;
-                // Climb up high enough to see if we can find a solid parent structure
                 while (currentParent != null && levelsClimbed < 12) {
                     collectAllText(currentParent, cardText);
                     if (cardText.toString().toLowerCase(Locale.ROOT).contains("mi") || cardText.toString().toLowerCase(Locale.ROOT).contains("km")) {
-                        break; // Successfully discovered context layout info!
+                        break; 
                     }
                     currentParent = currentParent.getParent();
                     levelsClimbed++;
                 }
 
-                // CRITICAL FALLBACK: If individual card crawling text fails due to deep layout nesting,
-                // scrape text from the global window layout directly to read screen values safely.
                 if (!cardText.toString().toLowerCase(Locale.ROOT).contains("mi") && !cardText.toString().toLowerCase(Locale.ROOT).contains("km") && activeWindowRoot != null) {
                     cardText.setLength(0);
                     collectAllText(activeWindowRoot, cardText);
                 }
 
-                // Comprehensive Regex supporting Imperial (mi) alongside Metric systems (km, m)
                 Pattern pattern = Pattern.compile("([0-9.]+)\\s*(km|mi|m)\\b", Pattern.CASE_INSENSITIVE);
                 Matcher matcher = pattern.matcher(cardText.toString());
                 List<Float> distances = new ArrayList<>();
@@ -270,7 +264,7 @@ public class AcceptAccessibilityService extends AccessibilityService {
                         float val = Float.parseFloat(matcher.group(1));
                         String unit = matcher.group(2).toLowerCase(Locale.ROOT);
                         if (unit.equals("m")) {
-                            val = val / 1000f; // Standardize meters to uniform metrics
+                            val = val / 1000f; 
                         }
                         distances.add(val);
                     } catch (Exception ignored) {}
@@ -294,7 +288,6 @@ public class AcceptAccessibilityService extends AccessibilityService {
                         uiHandler.post(() -> Toast.makeText(this, "Ignored an order: Distances out of bounds", Toast.LENGTH_SHORT).show());
                     }
                 } else {
-                    // Secure bypass execution rule if layout structure doesn't parse distance variables correctly
                     targetNode = button;
                     break;
                 }
@@ -305,7 +298,6 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return;
         }
 
-        // Integrity/Block Validations
         String status = prefs.getString(AcceptPrefs.KEY_USER_STATUS, "active");
         int freeClicks = prefs.getInt(AcceptPrefs.KEY_FREE_CLICKS, 0);
         long subExpires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
@@ -340,6 +332,8 @@ public class AcceptAccessibilityService extends AccessibilityService {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             Rect bounds = new Rect();
             finalTargetNode.getBoundsInScreen(bounds);
+            
+            // Generate tap directly on the bounds of the text we found
             int x = bounds.centerX();
             int y = bounds.centerY();
 
@@ -360,7 +354,6 @@ public class AcceptAccessibilityService extends AccessibilityService {
                 @Override
                 public void onCancelled(GestureDescription gestureDescription) {
                     super.onCancelled(gestureDescription);
-                    // Native execution safety fallback only if gesture is discarded
                     finalTargetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK);
                     prefs.edit().putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis()).apply();
                 }
@@ -395,25 +388,14 @@ public class AcceptAccessibilityService extends AccessibilityService {
         }
     }
 
-    private boolean isExactMatch(AccessibilityNodeInfo node, String targetText) {
-        String text = asString(node.getText()).toLowerCase(Locale.ROOT).trim();
-        String desc = asString(node.getContentDescription()).toLowerCase(Locale.ROOT).trim();
-        String[] needles = targetText.toLowerCase(Locale.ROOT).split(",");
-        for (String needle : needles) {
-            String trimmed = needle.trim();
-            if (!trimmed.isEmpty() && (text.equals(trimmed) || desc.equals(trimmed))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private boolean isTarget(AccessibilityNodeInfo node, String targetText) {
-        if (!node.isVisibleToUser() || !node.isEnabled()) {
+        // AGGRESSIVE TARGETING: Removed visibility checks because Uber's overlay layers 
+        // often report as "invisible" to standard Android Accessibility services.
+        if (node == null) {
             return false;
         }
 
-        String joined = asString(node.getText()) + " " + asString(node.getContentDescription()) + " " + asString(node.getViewIdResourceName());
+        String joined = asString(node.getText()) + " " + asString(node.getContentDescription());
         String[] needles = targetText.toLowerCase(Locale.ROOT).split(",");
         String haystack = joined.toLowerCase(Locale.ROOT).trim();
         if (TextUtils.isEmpty(haystack)) {
@@ -427,17 +409,6 @@ public class AcceptAccessibilityService extends AccessibilityService {
             }
         }
         return false;
-    }
-
-    private AccessibilityNodeInfo nearestClickable(AccessibilityNodeInfo node) {
-        AccessibilityNodeInfo current = node;
-        while (current != null) {
-            if (current.isClickable() && current.isEnabled() && current.isVisibleToUser()) {
-                return current;
-            }
-            current = current.getParent();
-        }
-        return node.isEnabled() && node.isVisibleToUser() ? node : null;
     }
 
     private String asString(CharSequence value) {
