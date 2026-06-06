@@ -2,7 +2,10 @@ package com.triplencse.acceptassist;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
-import android.accessibilityservice.GestureDescription; // <-- THIS WAS MISSING
+import android.accessibilityservice.GestureDescription;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -22,11 +25,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-
 
 public class AcceptAccessibilityService extends AccessibilityService {
     private static final long CLICK_COOLDOWN_MS = 650;
@@ -202,16 +200,19 @@ public class AcceptAccessibilityService extends AccessibilityService {
 
         List<AccessibilityNodeInfo> allButtons = new ArrayList<>();
         List<AccessibilityWindowInfo> windows = getWindows();
+        AccessibilityNodeInfo activeWindowRoot = null;
         
         for (AccessibilityWindowInfo window : windows) {
             AccessibilityNodeInfo root = window.getRoot();
             if (root != null && root.getPackageName() != null && packageName.equals(root.getPackageName().toString())) {
+                activeWindowRoot = root; // Keep track of root as absolute backup text source
                 List<AccessibilityNodeInfo> matches = new ArrayList<>();
                 collectMatches(root, targetText, matches);
                 
                 for (AccessibilityNodeInfo match : matches) {
                     AccessibilityNodeInfo clickable = nearestClickable(match);
-                    if (clickable != null && clickable.isClickable() && isExactMatch(match, targetText)) {
+                    // Using isTarget instead of isExactMatch to catch dynamic Uber variations
+                    if (clickable != null && clickable.isClickable() && isTarget(match, targetText)) {
                         if (!allButtons.contains(clickable)) {
                             allButtons.add(clickable);
                         }
@@ -237,18 +238,29 @@ public class AcceptAccessibilityService extends AccessibilityService {
             targetNode = allButtons.get(0);
         } else {
             for (AccessibilityNodeInfo button : allButtons) {
-                // Safeguard dynamic scaling lookup context up to 7 layout steps safely
-                AccessibilityNodeInfo card = button;
-                for (int i = 0; i < 7; i++) {
-                    if (card.getParent() != null) {
-                        card = card.getParent();
+                StringBuilder cardText = new StringBuilder();
+                
+                // Dynamic climbing loop to extract context securely
+                AccessibilityNodeInfo currentParent = button.getParent();
+                int levelsClimbed = 0;
+                // Climb up high enough to see if we can find a solid parent structure
+                while (currentParent != null && levelsClimbed < 12) {
+                    collectAllText(currentParent, cardText);
+                    if (cardText.toString().toLowerCase(Locale.ROOT).contains("mi") || cardText.toString().toLowerCase(Locale.ROOT).contains("km")) {
+                        break; // Successfully discovered context layout info!
                     }
+                    currentParent = currentParent.getParent();
+                    levelsClimbed++;
                 }
 
-                StringBuilder cardText = new StringBuilder();
-                collectAllText(card, cardText);
+                // CRITICAL FALLBACK: If individual card crawling text fails due to deep layout nesting,
+                // scrape text from the global window layout directly to read screen values safely.
+                if (!cardText.toString().toLowerCase(Locale.ROOT).contains("mi") && !cardText.toString().toLowerCase(Locale.ROOT).contains("km") && activeWindowRoot != null) {
+                    cardText.setLength(0);
+                    collectAllText(activeWindowRoot, cardText);
+                }
 
-                // Comprehensive Regex supporting Imperial (mi) alongside Metric system layouts (km, m)
+                // Comprehensive Regex supporting Imperial (mi) alongside Metric systems (km, m)
                 Pattern pattern = Pattern.compile("([0-9.]+)\\s*(km|mi|m)\\b", Pattern.CASE_INSENSITIVE);
                 Matcher matcher = pattern.matcher(cardText.toString());
                 List<Float> distances = new ArrayList<>();
@@ -282,7 +294,7 @@ public class AcceptAccessibilityService extends AccessibilityService {
                         uiHandler.post(() -> Toast.makeText(this, "Ignored an order: Distances out of bounds", Toast.LENGTH_SHORT).show());
                     }
                 } else {
-                    // Fallback execution to avoid parsing locking faults
+                    // Secure bypass execution rule if layout structure doesn't parse distance variables correctly
                     targetNode = button;
                     break;
                 }
