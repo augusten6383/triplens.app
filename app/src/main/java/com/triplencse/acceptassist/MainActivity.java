@@ -670,7 +670,7 @@ public class MainActivity extends Activity {
         leftSec.setGravity(Gravity.CENTER_VERTICAL);
         
         // Glowing app icon
-        View appIcon = systemIcon(android.R.drawable.ic_menu_compass, Color.TRANSPARENT, 48, 8);
+        View appIcon = systemIcon(R.drawable.triplens_logo, Color.TRANSPARENT, 48, 8);
         appIcon.setBackground(gradientRect(Color.parseColor("#0EA5E9"), Color.parseColor("#3B82F6"), 24));
         leftSec.addView(appIcon);
 
@@ -685,11 +685,12 @@ public class MainActivity extends Activity {
         appTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         nameSec.addView(appTitle);
 
-        TextView userText = new TextView(this);
-        userText.setTextColor(COLOR_TEXT_SECONDARY);
-        userText.setTextSize(13);
-        userText.setText(loggedInUser);
-        nameSec.addView(userText);
+        // Hidden user email as per request
+        // TextView userText = new TextView(this);
+        // userText.setTextColor(COLOR_TEXT_SECONDARY);
+        // userText.setTextSize(13);
+        // userText.setText(loggedInUser);
+        // nameSec.addView(userText);
 
         leftSec.addView(nameSec);
         
@@ -990,14 +991,14 @@ public class MainActivity extends Activity {
         title.setPadding(0, 0, 0, dp(12));
         card.addView(title);
 
-        card.addView(buildCheckboxRow("Rapido Rider", "target_rapido", true));
-        card.addView(buildCheckboxRow("Uber Driver", "target_uber", true));
-        card.addView(buildCheckboxRow("Ola Driver", "target_ola", true));
+        card.addView(buildCheckboxRow("Rapido Rider", "target_rapido", true, true));
+        card.addView(buildCheckboxRow("Uber Driver (Coming Soon)", "target_uber", false, false));
+        card.addView(buildCheckboxRow("Ola Driver (Coming Soon)", "target_ola", false, false));
 
         return card;
     }
 
-    private View buildCheckboxRow(String label, String prefKey, boolean defVal) {
+    private View buildCheckboxRow(String label, String prefKey, boolean defVal, boolean isEnabled) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -1012,9 +1013,15 @@ public class MainActivity extends Activity {
         row.addView(txt, params);
 
         android.widget.Switch toggle = new android.widget.Switch(this);
-        toggle.setChecked(prefs.getBoolean(prefKey, defVal));
+        toggle.setChecked(isEnabled && prefs.getBoolean(prefKey, defVal));
+        toggle.setEnabled(isEnabled);
         toggle.setOnCheckedChangeListener((btn, isChecked) -> prefs.edit().putBoolean(prefKey, isChecked).apply());
         row.addView(toggle);
+        
+        if (!isEnabled) {
+            txt.setTextColor(COLOR_TEXT_SECONDARY);
+            toggle.setAlpha(0.5f);
+        }
 
         return row;
     }
@@ -1191,6 +1198,21 @@ public class MainActivity extends Activity {
         // Card 3: 299 / Month
         root.addView(buildPlanCard("Month Pass", "₹299 / month", "Best value. Unrestricted access for a full month"), matchWrapWithTop(10));
 
+        long subExpires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
+        boolean isSubscribed = subExpires > (System.currentTimeMillis() / 1000L);
+        if (freeClicks > 0 || isSubscribed) {
+            Button goBackBtn = new Button(this);
+            goBackBtn.setText("Go Back to Dashboard");
+            goBackBtn.setBackground(gradientRect(Color.parseColor("#3B82F6"), Color.parseColor("#06B6D4"), 10));
+            goBackBtn.setTextColor(Color.WHITE);
+            goBackBtn.setAllCaps(false);
+            goBackBtn.setTextSize(16);
+            goBackBtn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            goBackBtn.setPadding(0, dp(14), 0, dp(14));
+            goBackBtn.setOnClickListener(v -> setContentView(buildDashboardView()));
+            root.addView(goBackBtn, matchWrapWithTop(28));
+        }
+
         // Demo Activation Button
         Button demoBtn = new Button(this);
         demoBtn.setText("Demo: Activate Trial (Add 1 Day Premium)");
@@ -1215,7 +1237,7 @@ public class MainActivity extends Activity {
                 }
             });
         });
-        root.addView(demoBtn, matchWrapWithTop(28));
+        root.addView(demoBtn, matchWrapWithTop(14));
 
         Button logoutBtn = textLinkButton("Log Out");
         logoutBtn.setOnClickListener(v -> {
