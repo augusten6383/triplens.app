@@ -12,7 +12,20 @@
           "package_name": "com.triplencse.acceptassist"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1078412424349-f3t531vabqun3a8b7kbf15jjn8110pob.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.triplencse.acceptassist",
+            "certificate_hash": "7fe30a924b3187779337f497311525bbc630308d"
+          }
+        },
+        {
+          "client_id": "1078412424349-2cgfevj8e053t8q99qho1is6udhki3nu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDI1cSUKOYIV7OPqAhxY2a60kayjU6M3j0"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1078412424349-2cgfevj8e053t8q99qho1is6udhki3nu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
