@@ -29,7 +29,8 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | tr -d '\n\r ' | base64 --decode > app/upload-keystore.jks
+            echo "Length of KEYSTORE_BASE64 is ${#KEYSTORE_BASE64} characters."
+            echo "$KEYSTORE_BASE64" | base64 -di > app/upload-keystore.jks
             echo "Keystore decoded successfully."
           else
             echo "Warning: KEYSTORE_BASE64 secret is not set!"
