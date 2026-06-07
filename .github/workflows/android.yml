@@ -8,10 +8,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -19,30 +23,29 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Automatically install Gradle on the GitHub runner
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.7'
 
-      - name: Cache Debug Keystore
-        id: cache-keystore
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: debug-keystore-v1
-
-      # Generate keystore if not cached
-      - name: Generate Keystore if missing
-        if: steps.cache-keystore.outputs.cache-hit != 'true'
+      - name: Generate and Commit Keystore if missing
         run: |
-          mkdir -p ~/.android
-          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          if [ ! -f "app/debug.keystore" ]; then
+            echo "Keystore not found. Generating a new permanent one..."
+            keytool -genkey -v -keystore app/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add app/debug.keystore
+            git commit -m "Auto-generate permanent debug keystore"
+            git push
+          else
+            echo "Keystore already exists! Reusing the permanent keystore."
+          fi
 
       - name: Print SHA-1 Fingerprint for Firebase
-        run: keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep "SHA1:"
+        run: keytool -list -v -keystore app/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep "SHA1:"
 
-      # Notice we use 'gradle' instead of './gradlew' here
       - name: Build APK
         run: gradle assembleDebug
 
