@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "1078412424349-iisditk6me5vqq6jnurft0k4td98248v.apps.googleusercontent.com",
+          "client_id": "1078412424349-6bhp5f07m1irbm7iph7ldm1hvou59sq9.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.triplencse.acceptassist",
-            "certificate_hash": "8fc2b7626d486fcb0ab44adc589e6159e6f36986"
+            "certificate_hash": "88099206bb9918639fbf8cbb351206f8a7090ea2"
           }
         },
         {
