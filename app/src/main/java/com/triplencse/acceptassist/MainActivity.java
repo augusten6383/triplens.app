@@ -100,13 +100,30 @@ public class MainActivity extends Activity {
                     
                     org.json.JSONObject obj = new org.json.JSONObject(json.toString());
                     int latestVersion = obj.optInt("latestVersion", 1);
+                    int minimumSupportedVersion = obj.optInt("minimumSupportedVersion", 1);
                     String downloadUrl = obj.optString("downloadUrl", "https://github.com/augusten6383/triplens.app/releases/latest");
                     
                     int currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
                     
-                    if (currentVersion < latestVersion) {
+                    if (currentVersion < minimumSupportedVersion) {
                         updateRequired = true;
                         runOnUiThread(() -> setContentView(buildForceUpdateView(downloadUrl)));
+                        return;
+                    } else if (currentVersion < latestVersion) {
+                        // Optional update
+                        runOnUiThread(() -> {
+                            new android.app.AlertDialog.Builder(MainActivity.this)
+                                .setTitle("Update Available")
+                                .setMessage("A new version of Triplens is available. Would you like to update now?")
+                                .setPositiveButton("Update", (dialog, which) -> {
+                                    startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(downloadUrl)));
+                                })
+                                .setNegativeButton("Later", (dialog, which) -> {
+                                    proceedToNormalStartup();
+                                })
+                                .setCancelable(false)
+                                .show();
+                        });
                         return;
                     }
                 }

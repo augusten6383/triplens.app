@@ -37,3 +37,13 @@ jobs:
         with:
           name: app-release
           path: app/build/outputs/apk/release/*.apk
+
+      - name: Create or Update Latest Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          name: Latest Release
+          files: app/build/outputs/apk/release/*.apk
+          body: "Automated release of the latest Triplens APK."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
