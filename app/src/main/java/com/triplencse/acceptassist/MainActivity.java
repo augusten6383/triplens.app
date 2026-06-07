@@ -644,6 +644,21 @@ public class MainActivity extends Activity {
             } catch (ApiException e) {
                 Toast.makeText(this, "Sign-in cancelled. Please try again.", Toast.LENGTH_SHORT).show();
             }
+        } else if (requestCode == 1001) {
+            if ((RESULT_OK == resultCode) || (resultCode == 11)) {
+                if (data != null) {
+                    String trxt = data.getStringExtra("response");
+                    if (trxt != null && trxt.toLowerCase().contains("status=success")) {
+                        handlePaymentSuccess();
+                    } else {
+                        Toast.makeText(this, "Payment failed or cancelled.", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(this, "Payment failed or cancelled.", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(this, "Payment failed or cancelled.", Toast.LENGTH_SHORT).show();
+            }
         }
     }
 
@@ -1240,26 +1255,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == 1001) {
-            if ((RESULT_OK == resultCode) || (resultCode == 11)) {
-                if (data != null) {
-                    String trxt = data.getStringExtra("response");
-                    if (trxt != null && trxt.toLowerCase().contains("status=success")) {
-                        handlePaymentSuccess();
-                    } else {
-                        Toast.makeText(this, "Payment failed or cancelled.", Toast.LENGTH_SHORT).show();
-                    }
-                } else {
-                    Toast.makeText(this, "Payment failed or cancelled.", Toast.LENGTH_SHORT).show();
-                }
-            } else {
-                Toast.makeText(this, "Payment failed or cancelled.", Toast.LENGTH_SHORT).show();
-            }
-        }
-    }
+
 
     private void handlePaymentSuccess() {
         int days = prefs.getInt("pending_payment_duration", 0);
