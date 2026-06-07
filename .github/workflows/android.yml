@@ -25,6 +25,23 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Cache Debug Keystore
+        id: cache-keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: debug-keystore-v1
+
+      # Generate keystore if not cached
+      - name: Generate Keystore if missing
+        if: steps.cache-keystore.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.android
+          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Print SHA-1 Fingerprint for Firebase
+        run: keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep "SHA1:"
+
       # Notice we use 'gradle' instead of './gradlew' here
       - name: Build APK
         run: gradle assembleDebug
