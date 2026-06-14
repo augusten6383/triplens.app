@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1078412424349",
+    "project_id": "triplens-94d41",
+    "storage_bucket": "triplens-94d41.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1078412424349:android:1ef6ad7b82c26fa065d074",
+        "android_client_info": {
+          "package_name": "com.triplencse.acceptassist"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1078412424349-6bhp5f07m1irbm7iph7ldm1hvou59sq9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.triplencse.acceptassist",
+            "certificate_hash": "88099206bb9918639fbf8cbb351206f8a7090ea2"
+          }
+        },
+        {
+          "client_id": "1078412424349-2cgfevj8e053t8q99qho1is6udhki3nu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDI1cSUKOYIV7OPqAhxY2a60kayjU6M3j0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1078412424349-2cgfevj8e053t8q99qho1is6udhki3nu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

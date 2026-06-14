@@ -25,12 +25,25 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.content.pm.PackageManager;
 
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.auth.AuthCredential;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.auth.GoogleAuthProvider;
+
 public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private EditText minPickupInput;
     private EditText maxPickupInput;
     private EditText minDropInput;
     private EditText maxDropInput;
+    private EditText minPricePerKmInput;
+    private EditText minPriceInput;
     private TextView serviceStatus;
     private RadioGroup appModeGroup;
     private RadioButton radioRapido;
@@ -51,17 +64,95 @@ public class MainActivity extends Activity {
     private static final int COLOR_DANGER = Color.rgb(239, 68, 68); // Soft red
     private static final int COLOR_WARNING = Color.rgb(245, 158, 11); // Soft orange
 
+    private FirebaseAuth mAuth;
+    private GoogleSignInClient mGoogleSignInClient;
+    private static final int RC_SIGN_IN = 9001;
+    private boolean updateRequired = false;
+    private boolean isCheckingUpdates = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        mAuth = FirebaseAuth.getInstance();
+        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(getString(R.string.default_web_client_id))
+                .requestEmail()
+                .build();
+        mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
+
         prefs = getSharedPreferences(AcceptPrefs.NAME, MODE_PRIVATE);
         AcceptPrefs.ensureDefaults(prefs);
+        setContentView(buildLoadingView("Checking for updates..."));
+        checkAppUpdate();
+    }
+
+
+    private void checkAppUpdate() {
+        isCheckingUpdates = true;
+        String updateUrl = "https://raw.githubusercontent.com/augusten6383/triplens.app/main/version.json";
+        new Thread(() -> {
+            try {
+                java.net.URL url = new java.net.URL(updateUrl);
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                conn.setRequestMethod("GET");
+                if (conn.getResponseCode() == 200) {
+                    java.io.InputStream is = conn.getInputStream();
+                    java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(is));
+                    StringBuilder json = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) json.append(line);
+                    reader.close();
+                    
+                    org.json.JSONObject obj = new org.json.JSONObject(json.toString());
+                    int latestVersion = obj.optInt("latestVersion", 1);
+                    int minimumSupportedVersion = obj.optInt("minimumSupportedVersion", 1);
+                    String downloadUrl = obj.optString("downloadUrl", "https://github.com/augusten6383/triplens.app/releases/latest");
+                    
+                    int currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+                    
+                    if (currentVersion < minimumSupportedVersion) {
+                        updateRequired = true;
+                        isCheckingUpdates = false;
+                        runOnUiThread(() -> setContentView(buildForceUpdateView(downloadUrl)));
+                        return;
+                    } else if (currentVersion < latestVersion) {
+                        isCheckingUpdates = false;
+                        runOnUiThread(() -> {
+                            new android.app.AlertDialog.Builder(MainActivity.this)
+                                .setTitle("Update Available")
+                                .setMessage("A new version of Triplens is available. Would you like to update now?")
+                                .setPositiveButton("Update", (dialog, which) -> {
+                                    startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(downloadUrl)));
+                                })
+                                .setNegativeButton("Later", (dialog, which) -> {
+                                    proceedToNormalStartup();
+                                })
+                                .setCancelable(false)
+                                .show();
+                        });
+                        return;
+                    }
+                }
+            } catch (Exception e) {
+                // Ignore update check failure
+            }
+            isCheckingUpdates = false;
+            runOnUiThread(this::proceedToNormalStartup);
+        }).start();
+    }
+
+    private void proceedToNormalStartup() {
         navigateToScreen();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        if (updateRequired || isCheckingUpdates) return;
+        
         String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "");
         if (!loggedInUser.isEmpty()) {
             proceedNavigation();
@@ -345,6 +436,42 @@ public class MainActivity extends Activity {
         return root;
     }
 
+    private View buildForceUpdateView(String downloadUrl) {
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(24), dp(40), dp(24), dp(40));
+        root.setBackgroundColor(COLOR_BG);
+        root.setGravity(Gravity.CENTER_VERTICAL);
+        scrollView.addView(root);
+
+        TextView title = new TextView(this);
+        title.setText("Update Required");
+        title.setTextColor(COLOR_DANGER);
+        title.setTextSize(30);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setGravity(Gravity.CENTER);
+        root.addView(title, matchWrap());
+
+        TextView desc = new TextView(this);
+        desc.setText("This version of the app is no longer supported. Please update to the latest version to continue using Triplens.");
+        desc.setTextColor(COLOR_TEXT_SECONDARY);
+        desc.setTextSize(16);
+        desc.setGravity(Gravity.CENTER);
+        desc.setPadding(0, dp(16), 0, dp(32));
+        root.addView(desc, matchWrap());
+
+        Button updateBtn = primaryButton("Update Now");
+        updateBtn.setOnClickListener(v -> {
+            startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(downloadUrl)));
+        });
+        root.addView(updateBtn, matchWrapWithTop(16));
+
+        return scrollView;
+    }
+
     private View buildDbConfigView() {
         ScrollView scrollView = new ScrollView(this);
         scrollView.setFillViewport(true);
@@ -491,7 +618,63 @@ public class MainActivity extends Activity {
         forgotLink.setOnClickListener(v -> setContentView(buildRecoveryView()));
         root.addView(forgotLink, matchWrapWithTop(8));
 
+        Button googleSignInBtn = secondaryButton("Continue with Google");
+        googleSignInBtn.setOnClickListener(v -> {
+            Intent signInIntent = mGoogleSignInClient.getSignInIntent();
+            startActivityForResult(signInIntent, RC_SIGN_IN);
+        });
+        root.addView(googleSignInBtn, matchWrapWithTop(16));
+
         return scrollView;
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == RC_SIGN_IN) {
+            Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
+            try {
+                GoogleSignInAccount account = task.getResult(ApiException.class);
+                firebaseAuthWithGoogle(account.getIdToken());
+            } catch (ApiException e) {
+                Toast.makeText(this, "Google sign in failed", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    private void firebaseAuthWithGoogle(String idToken) {
+        AuthCredential credential = GoogleAuthProvider.getCredential(idToken, null);
+        mAuth.signInWithCredential(credential)
+                .addOnCompleteListener(this, task -> {
+                    if (task.isSuccessful()) {
+                        FirebaseUser user = mAuth.getCurrentUser();
+                        if (user != null && user.getEmail() != null) {
+                            String email = user.getEmail();
+                            Toast.makeText(MainActivity.this, "Google Sign-In success. Logging into Turso...", Toast.LENGTH_SHORT).show();
+                            TursoHelper.googleSignInUser(MainActivity.this, email, new TursoHelper.Callback() {
+                                @Override
+                                public void onSuccess(org.json.JSONArray rows) {
+                                    try {
+                                        org.json.JSONArray firstRow = rows.getJSONArray(0);
+                                        String username = TursoHelper.getValueAsString(firstRow.getJSONObject(0));
+                                        prefs.edit().putString(AcceptPrefs.KEY_LOGGED_IN_USER, username).apply();
+                                        Toast.makeText(MainActivity.this, "Welcome " + username + "!", Toast.LENGTH_SHORT).show();
+                                        navigateToScreen();
+                                    } catch (Exception ex) {
+                                        Toast.makeText(MainActivity.this, "Error completing Google login: " + ex.getMessage(), Toast.LENGTH_SHORT).show();
+                                    }
+                                }
+
+                                @Override
+                                public void onError(String message) {
+                                    Toast.makeText(MainActivity.this, "Turso login failed: " + message, Toast.LENGTH_LONG).show();
+                                }
+                            });
+                        }
+                    } else {
+                        Toast.makeText(MainActivity.this, "Firebase Authentication failed.", Toast.LENGTH_SHORT).show();
+                    }
+                });
     }
 
     private View buildSignUpView() {
@@ -758,12 +941,12 @@ public class MainActivity extends Activity {
         // 6. App Mode Selection Card
         root.addView(buildAppModeSelectionCard(), matchWrapWithTop(12));
 
-        // 7. Distance Settings / Custom Settings Card (Conditional)
+        // 7. Filters / Custom Settings Card (Conditional)
         String currentMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
         if ("custom".equals(currentMode)) {
             root.addView(buildCustomAppSettingsCard(), matchWrapWithTop(12));
         } else {
-            root.addView(buildDistanceSettingsCard(), matchWrapWithTop(12));
+            root.addView(buildFiltersCard(), matchWrapWithTop(12));
         }
 
         // 8. Save Settings Button
@@ -1226,141 +1409,277 @@ public class MainActivity extends Activity {
         return card;
     }
 
-    private View buildSettingRow(String title, String subtitle, EditText inputField, String emoji, int emojiBgColor) {
+    private View buildSettingRow(String title, String subtitle, EditText inputField) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(0, dp(8), 0, dp(8));
 
-        View squareIcon = circularIcon(emoji, emojiBgColor, 36);
-        row.addView(squareIcon);
-
         LinearLayout textSec = new LinearLayout(this);
         textSec.setOrientation(LinearLayout.VERTICAL);
-        textSec.setPadding(dp(12), 0, dp(12), 0);
 
         TextView titleView = new TextView(this);
         titleView.setText(title);
         titleView.setTextColor(COLOR_TEXT_PRIMARY);
-        titleView.setTextSize(14);
+        titleView.setTextSize(15);
         titleView.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         textSec.addView(titleView);
 
-        TextView subView = new TextView(this);
-        subView.setText(subtitle);
-        subView.setTextColor(COLOR_TEXT_SECONDARY);
-        subView.setTextSize(11);
-        textSec.addView(subView);
+        if (subtitle != null && !subtitle.isEmpty()) {
+            TextView subView = new TextView(this);
+            subView.setText(subtitle);
+            subView.setTextColor(COLOR_TEXT_SECONDARY);
+            subView.setTextSize(12);
+            subView.setPadding(0, dp(2), 0, 0);
+            textSec.addView(subView);
+        }
 
         LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        textParams.rightMargin = dp(16);
         row.addView(textSec, textParams);
 
         inputField.setGravity(Gravity.CENTER);
-        inputField.setTextSize(14);
-        inputField.setTextColor(COLOR_TEXT_PRIMARY);
-        inputField.setPadding(dp(12), dp(6), dp(12), dp(6));
-        inputField.setBackground(roundedRect(COLOR_INPUT_BG, 8));
+        inputField.setTextSize(16);
+        inputField.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        inputField.setTextColor(COLOR_ACCENT);
+        inputField.setPadding(dp(16), dp(10), dp(16), dp(10));
+        inputField.setBackground(roundedRectWithBorder(COLOR_INPUT_BG, 8, COLOR_BORDER, 1));
         
-        LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(dp(80), LinearLayout.LayoutParams.WRAP_CONTENT);
+        LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(dp(90), LinearLayout.LayoutParams.WRAP_CONTENT);
         row.addView(inputField, inputParams);
 
         return row;
     }
 
-    private View buildDistanceSettingsCard() {
+    private View buildFiltersCard() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(roundedRect(COLOR_CARD, 12));
-        card.setPadding(dp(16), dp(16), dp(16), dp(16));
-
-        // Header
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(0, 0, 0, dp(12));
-
-        TextView icon = new TextView(this);
-        icon.setText("⚙️");
-        icon.setTextSize(16);
-        header.addView(icon);
+        card.setBackground(roundedRect(COLOR_CARD, 24));
+        card.setPadding(dp(20), dp(20), dp(20), dp(20));
 
         TextView title = new TextView(this);
-        title.setText("Distance Settings (km)");
-        title.setTextColor(COLOR_TEXT_PRIMARY);
-        title.setTextSize(15);
+        title.setText("Smart Filters");
+        title.setTextColor(COLOR_TEXT_SECONDARY);
+        title.setTextSize(13);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        title.setPadding(dp(8), 0, 0, 0);
-        header.addView(title);
+        title.setPadding(0, 0, 0, dp(16));
+        card.addView(title);
 
-        card.addView(header);
+        // Toggles
+        card.addView(buildCheckboxRow("Require Distance AND Price", AcceptPrefs.KEY_TOGGLE_DIST_PRICE_AND, false, true));
+        card.addView(buildCheckboxRow("Pass ALL Price Rules", AcceptPrefs.KEY_TOGGLE_PRICE_AND, false, true));
 
-        // Row 1: Min Pickup
-        minPickupInput = new EditText(this);
-        minPickupInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f)));
-        minPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        card.addView(buildSettingRow("Minimum Pickup Distance", "Set the minimum distance (km)", minPickupInput, "📍", Color.rgb(109, 40, 217)));
+        // Separator
+        View sep = new View(this);
+        sep.setBackgroundColor(COLOR_BORDER);
+        LinearLayout.LayoutParams sepParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
+        sepParams.topMargin = dp(16);
+        sepParams.bottomMargin = dp(16);
+        card.addView(sep, sepParams);
 
-        // Row 2: Max Pickup
-        maxPickupInput = new EditText(this);
-        maxPickupInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f)));
-        maxPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        card.addView(buildSettingRow("Maximum Pickup Distance", "Set the maximum distance (km)", maxPickupInput, "↗️", Color.rgb(29, 78, 216)));
+        boolean hasAny = false;
+        
+        minPickupInput = null;
+        maxPickupInput = null;
+        minDropInput = null;
+        maxDropInput = null;
+        minPricePerKmInput = null;
+        minPriceInput = null;
 
-        // Row 3: Min Drop
-        minDropInput = new EditText(this);
-        minDropInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f)));
-        minDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        card.addView(buildSettingRow("Minimum Drop Distance", "Set the minimum drop distance (km)", minDropInput, "📥", Color.rgb(194, 65, 12)));
+        if (prefs.getBoolean(AcceptPrefs.KEY_FILTER_MAX_PICKUP_ACTIVE, false)) {
+            hasAny = true;
+            maxPickupInput = new EditText(this);
+            maxPickupInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f)));
+            maxPickupInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+            card.addView(buildRemovableSettingRow("Max Pickup (km)", maxPickupInput, AcceptPrefs.KEY_FILTER_MAX_PICKUP_ACTIVE));
+        }
 
-        // Row 4: Max Drop
-        maxDropInput = new EditText(this);
-        maxDropInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f)));
-        maxDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        card.addView(buildSettingRow("Maximum Drop Distance", "Set the maximum drop distance (km)", maxDropInput, "📤", Color.rgb(190, 24, 74)));
+        if (prefs.getBoolean(AcceptPrefs.KEY_FILTER_DROP_ACTIVE, false)) {
+            hasAny = true;
+            minDropInput = new EditText(this);
+            minDropInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f)));
+            minDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+            card.addView(buildSettingRow("Min Drop (km)", "", minDropInput));
+
+            maxDropInput = new EditText(this);
+            maxDropInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f)));
+            maxDropInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+            card.addView(buildRemovableSettingRow("Max Drop (km)", maxDropInput, AcceptPrefs.KEY_FILTER_DROP_ACTIVE));
+        }
+
+        if (prefs.getBoolean(AcceptPrefs.KEY_FILTER_PRICE_KM_ACTIVE, false)) {
+            hasAny = true;
+            minPricePerKmInput = new EditText(this);
+            minPricePerKmInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_PRICE_PER_KM, 0.0f)));
+            minPricePerKmInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+            card.addView(buildRemovableSettingRow("Min Price/Km", minPricePerKmInput, AcceptPrefs.KEY_FILTER_PRICE_KM_ACTIVE));
+        }
+
+        if (prefs.getBoolean(AcceptPrefs.KEY_FILTER_TOTAL_PRICE_ACTIVE, false)) {
+            hasAny = true;
+            minPriceInput = new EditText(this);
+            minPriceInput.setText(String.valueOf(prefs.getFloat(AcceptPrefs.KEY_MIN_PRICE, 0.0f)));
+            minPriceInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+            card.addView(buildRemovableSettingRow("Min Total Price", minPriceInput, AcceptPrefs.KEY_FILTER_TOTAL_PRICE_ACTIVE));
+        }
+
+        if (!hasAny) {
+            TextView noFilters = new TextView(this);
+            noFilters.setText("No filters added. Accepting all orders.");
+            noFilters.setTextColor(Color.parseColor("#10B981"));
+            noFilters.setTextSize(14);
+            noFilters.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            noFilters.setPadding(0, 0, 0, dp(16));
+            card.addView(noFilters);
+        }
+
+        // Add Filter Button
+        Button addFilterBtn = new Button(this);
+        addFilterBtn.setText("+ Add Filter");
+        addFilterBtn.setBackground(roundedRectWithBorder(COLOR_INPUT_BG, 12, COLOR_BORDER, 1));
+        addFilterBtn.setTextColor(Color.WHITE);
+        addFilterBtn.setAllCaps(false);
+        addFilterBtn.setOnClickListener(v -> showAddFilterDialog());
+        
+        LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnParams.topMargin = dp(8);
+        card.addView(addFilterBtn, btnParams);
 
         return card;
+    }
+
+    private View buildRemovableSettingRow(String title, EditText inputField, String prefKey) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(8), 0, dp(8));
+
+        TextView titleView = new TextView(this);
+        titleView.setText(title);
+        titleView.setTextColor(COLOR_TEXT_PRIMARY);
+        titleView.setTextSize(15);
+        titleView.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        titleParams.rightMargin = dp(8);
+        row.addView(titleView, titleParams);
+
+        inputField.setGravity(Gravity.CENTER);
+        inputField.setTextSize(16);
+        inputField.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        inputField.setTextColor(COLOR_ACCENT);
+        inputField.setPadding(dp(16), dp(10), dp(16), dp(10));
+        inputField.setBackground(roundedRectWithBorder(COLOR_INPUT_BG, 8, COLOR_BORDER, 1));
+        
+        LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(dp(90), LinearLayout.LayoutParams.WRAP_CONTENT);
+        row.addView(inputField, inputParams);
+
+        TextView removeBtn = new TextView(this);
+        removeBtn.setText("✕");
+        removeBtn.setTextColor(COLOR_DANGER);
+        removeBtn.setTextSize(18);
+        removeBtn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        removeBtn.setPadding(dp(16), dp(8), dp(8), dp(8));
+        removeBtn.setOnClickListener(v -> {
+            saveSettings();
+            prefs.edit().putBoolean(prefKey, false).apply();
+            setContentView(buildDashboardView());
+        });
+        row.addView(removeBtn);
+
+        return row;
+    }
+
+    private void showAddFilterDialog() {
+        java.util.List<String> optionsList = new java.util.ArrayList<>();
+        java.util.List<String> keysList = new java.util.ArrayList<>();
+
+        if (!prefs.getBoolean(AcceptPrefs.KEY_FILTER_MAX_PICKUP_ACTIVE, false)) {
+            optionsList.add("Max Pickup Distance");
+            keysList.add(AcceptPrefs.KEY_FILTER_MAX_PICKUP_ACTIVE);
+        }
+        if (!prefs.getBoolean(AcceptPrefs.KEY_FILTER_DROP_ACTIVE, false)) {
+            optionsList.add("Min & Max Drop Distance");
+            keysList.add(AcceptPrefs.KEY_FILTER_DROP_ACTIVE);
+        }
+        if (!prefs.getBoolean(AcceptPrefs.KEY_FILTER_PRICE_KM_ACTIVE, false)) {
+            optionsList.add("Min Price Per Km");
+            keysList.add(AcceptPrefs.KEY_FILTER_PRICE_KM_ACTIVE);
+        }
+        if (!prefs.getBoolean(AcceptPrefs.KEY_FILTER_TOTAL_PRICE_ACTIVE, false)) {
+            optionsList.add("Min Total Price");
+            keysList.add(AcceptPrefs.KEY_FILTER_TOTAL_PRICE_ACTIVE);
+        }
+
+        if (optionsList.isEmpty()) {
+            Toast.makeText(this, "All filters are already added!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String[] options = optionsList.toArray(new String[0]);
+        
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Add a Filter")
+            .setItems(options, (dialog, which) -> {
+                saveSettings();
+                prefs.edit().putBoolean(keysList.get(which), true).apply();
+                setContentView(buildDashboardView());
+            })
+            .show();
+    }
+
+    private View buildCheckboxRow(String label, String prefKey, boolean defVal, boolean isEnabled) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(10), 0, dp(10));
+
+        TextView txt = new TextView(this);
+        txt.setText(label);
+        txt.setTextColor(COLOR_TEXT_PRIMARY);
+        txt.setTextSize(15);
+        txt.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        row.addView(txt, params);
+
+        android.widget.Switch toggle = new android.widget.Switch(this);
+        toggle.setChecked(isEnabled && prefs.getBoolean(prefKey, defVal));
+        toggle.setEnabled(isEnabled);
+        toggle.setOnCheckedChangeListener((btn, isChecked) -> prefs.edit().putBoolean(prefKey, isChecked).apply());
+        row.addView(toggle);
+        
+        if (!isEnabled) {
+            txt.setTextColor(COLOR_TEXT_SECONDARY);
+            toggle.setAlpha(0.5f);
+        }
+
+        return row;
     }
 
     private View buildCustomAppSettingsCard() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(roundedRect(COLOR_CARD, 12));
-        card.setPadding(dp(16), dp(16), dp(16), dp(16));
-
-        // Header
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(0, 0, 0, dp(12));
-
-        TextView icon = new TextView(this);
-        icon.setText("⚙️");
-        icon.setTextSize(16);
-        header.addView(icon);
+        card.setBackground(roundedRect(COLOR_CARD, 16));
+        card.setPadding(dp(20), dp(20), dp(20), dp(20));
 
         TextView title = new TextView(this);
-        title.setText("Custom App Settings");
-        title.setTextColor(COLOR_TEXT_PRIMARY);
-        title.setTextSize(15);
+        title.setText("Custom App Targeting");
+        title.setTextColor(COLOR_TEXT_SECONDARY);
+        title.setTextSize(13);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        title.setPadding(dp(8), 0, 0, 0);
-        header.addView(title);
+        title.setPadding(0, 0, 0, dp(16));
+        card.addView(title);
 
-        card.addView(header);
-
-        // Row 1: Custom Package Name
         customPackageInput = new EditText(this);
         customPackageInput.setText(prefs.getString(AcceptPrefs.KEY_CUSTOM_PACKAGE, ""));
         customPackageInput.setHint("com.example");
         customPackageInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        card.addView(buildSettingRow("App Package Name", "Package name of target app", customPackageInput, "📱", Color.rgb(29, 78, 216)));
+        card.addView(buildSettingRow("Package Name", "e.g. com.uber.driver", customPackageInput));
 
-        // Row 2: Custom Target Texts
         customTargetTextInput = new EditText(this);
         customTargetTextInput.setText(prefs.getString(AcceptPrefs.KEY_CUSTOM_TARGET_TEXT, "Accept"));
-        customTargetTextInput.setHint("Accept,Click");
+        customTargetTextInput.setHint("Accept");
         customTargetTextInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        card.addView(buildSettingRow("Target Click Texts", "Comma-separated target values", customTargetTextInput, "✏️", Color.rgb(15, 118, 110)));
+        card.addView(buildSettingRow("Target Text", "Comma-separated", customTargetTextInput));
 
         return card;
     }
@@ -1373,6 +1692,8 @@ public class MainActivity extends Activity {
         float maxP = (maxPickupInput != null) ? parseFloatSafely(maxPickupInput.getText().toString()) : prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f);
         float minD = (minDropInput != null) ? parseFloatSafely(minDropInput.getText().toString()) : prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f);
         float maxD = (maxDropInput != null) ? parseFloatSafely(maxDropInput.getText().toString()) : prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f);
+        float minPriceKm = (minPricePerKmInput != null) ? parseFloatSafely(minPricePerKmInput.getText().toString()) : prefs.getFloat(AcceptPrefs.KEY_MIN_PRICE_PER_KM, 0.0f);
+        float minTotalP = (minPriceInput != null) ? parseFloatSafely(minPriceInput.getText().toString()) : prefs.getFloat(AcceptPrefs.KEY_MIN_PRICE, 0.0f);
 
         prefs.edit()
                 .putString(AcceptPrefs.KEY_CUSTOM_PACKAGE, customPkg)
@@ -1381,6 +1702,8 @@ public class MainActivity extends Activity {
                 .putFloat(AcceptPrefs.KEY_MAX_PICKUP, maxP)
                 .putFloat(AcceptPrefs.KEY_MIN_DROP, minD)
                 .putFloat(AcceptPrefs.KEY_MAX_DROP, maxD)
+                .putFloat(AcceptPrefs.KEY_MIN_PRICE_PER_KM, minPriceKm)
+                .putFloat(AcceptPrefs.KEY_MIN_PRICE, minTotalP)
                 .apply();
         refreshStatus();
         Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show();
@@ -1589,11 +1912,8 @@ public class MainActivity extends Activity {
         card.addView(descTxt, matchWrapWithTop(6));
 
         card.setOnClickListener(v -> {
-            new AlertDialog.Builder(this)
-                .setTitle("Select " + name)
-                .setMessage("In a production release, this would securely redirect to your Payment Gateway interface. For testing, please use the 'Demo: Activate Trial' button or the admin CLI tool.")
-                .setPositiveButton("OK", null)
-                .show();
+            android.content.Intent browserIntent = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://qubesolutions.vercel.app/triplens/"));
+            startActivity(browserIntent);
         });
 
         return card;

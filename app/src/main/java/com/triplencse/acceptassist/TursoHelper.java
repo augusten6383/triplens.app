@@ -378,4 +378,52 @@ public final class TursoHelper {
         args.add(username.trim().toLowerCase());
         executePipeline(ctx, sql, args, callback);
     }
+
+    public static void googleSignInUser(Context ctx, String email, Callback callback) {
+        String emailLower = email.trim().toLowerCase();
+        String checkSql = "SELECT username FROM users WHERE username = ? OR email = ?;";
+        List<Object> checkArgs = new ArrayList<>();
+        checkArgs.add(emailLower);
+        checkArgs.add(emailLower);
+        executePipeline(ctx, checkSql, checkArgs, new Callback() {
+            @Override
+            public void onSuccess(JSONArray rows) {
+                if (rows != null && rows.length() > 0) {
+                    callback.onSuccess(rows);
+                } else {
+                    String insertSql = "INSERT INTO users (username, email, phone, password, recovery_question, recovery_answer, status, free_clicks_remaining, subscription_expires_at) VALUES (?, ?, '', '', '', '', 'active', 1, 0);";
+                    List<Object> insertArgs = new ArrayList<>();
+                    insertArgs.add(emailLower);
+                    insertArgs.add(emailLower);
+                    executePipeline(ctx, insertSql, insertArgs, new Callback() {
+                        @Override
+                        public void onSuccess(JSONArray insertRows) {
+                            try {
+                                JSONArray mockRowArray = new JSONArray();
+                                JSONArray mockRow = new JSONArray();
+                                JSONObject mockUsernameObj = new JSONObject();
+                                mockUsernameObj.put("type", "text");
+                                mockUsernameObj.put("value", emailLower);
+                                mockRow.put(mockUsernameObj);
+                                mockRowArray.put(mockRow);
+                                callback.onSuccess(mockRowArray);
+                            } catch (Exception e) {
+                                callback.onError("Error parsing new user: " + e.getMessage());
+                            }
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            callback.onError("Failed to create Google user: " + message);
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                callback.onError(message);
+            }
+        });
+    }
 }

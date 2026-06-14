@@ -248,11 +248,85 @@ public class AcceptAccessibilityService extends AccessibilityService {
                     float pickupKm = uniqueDistances.get(0);
                     float dropKm = uniqueDistances.get(1);
 
-                    if (pickupKm >= minPickup && pickupKm <= maxPickup && dropKm >= minDrop && dropKm <= maxDrop) {
+                    // --- Extract Total Price ---
+                    float basePrice = 0f;
+                    float bonusPrice = 0f;
+                    
+                    // First look for the main price with the ₹ symbol
+                    java.util.regex.Pattern basePattern = java.util.regex.Pattern.compile("₹\\s*([0-9]+(?:\\.[0-9]{1,2})?)");
+                    java.util.regex.Matcher baseMatcher = basePattern.matcher(cardText.toString());
+                    if (baseMatcher.find()) {
+                        try {
+                            basePrice = Float.parseFloat(baseMatcher.group(1));
+                        } catch (Exception ignored) {}
+                    }
+                    
+                    // Look for +XX bonus near the price
+                    int priceIdx = cardText.toString().indexOf("₹");
+                    if (priceIdx != -1) {
+                        int endIdx = Math.min(priceIdx + 100, cardText.length());
+                        String nearPrice = cardText.substring(priceIdx, endIdx);
+                        java.util.regex.Pattern bonusPattern = java.util.regex.Pattern.compile("\\+\\s*([0-9]+(?:\\.[0-9]{1,2})?)");
+                        java.util.regex.Matcher bonusMatcher = bonusPattern.matcher(nearPrice);
+                        if (bonusMatcher.find()) {
+                            try {
+                                bonusPrice = Float.parseFloat(bonusMatcher.group(1));
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                    
+                    float totalPrice = basePrice + bonusPrice;
+                    float totalDistance = pickupKm + dropKm;
+                    float pricePerKm = (totalDistance > 0 && totalPrice > 0) ? (totalPrice / totalDistance) : 0f;
+
+                    // --- Apply Smart Filters ---
+                    boolean filterMaxPickupActive = prefs.getBoolean(AcceptPrefs.KEY_FILTER_MAX_PICKUP_ACTIVE, false);
+                    boolean filterDropActive = prefs.getBoolean(AcceptPrefs.KEY_FILTER_DROP_ACTIVE, false);
+                    boolean filterPriceKmActive = prefs.getBoolean(AcceptPrefs.KEY_FILTER_PRICE_KM_ACTIVE, false);
+                    boolean filterTotalPriceActive = prefs.getBoolean(AcceptPrefs.KEY_FILTER_TOTAL_PRICE_ACTIVE, false);
+
+                    float minPrice = prefs.getFloat(AcceptPrefs.KEY_MIN_PRICE, 0.0f);
+                    float minPricePerKm = prefs.getFloat(AcceptPrefs.KEY_MIN_PRICE_PER_KM, 0.0f);
+                    boolean toggleDistPriceAnd = prefs.getBoolean(AcceptPrefs.KEY_TOGGLE_DIST_PRICE_AND, false);
+                    boolean togglePriceAnd = prefs.getBoolean(AcceptPrefs.KEY_TOGGLE_PRICE_AND, false);
+
+                    boolean hasDistFilters = filterMaxPickupActive || filterDropActive;
+                    boolean hasPriceFilters = filterPriceKmActive || filterTotalPriceActive;
+
+                    boolean distPass = true;
+                    if (hasDistFilters) {
+                        if (filterMaxPickupActive && pickupKm > maxPickup) distPass = false;
+                        if (filterDropActive && (dropKm < minDrop || dropKm > maxDrop)) distPass = false;
+                    }
+
+                    boolean pricePass = false;
+                    if (hasPriceFilters) {
+                        boolean kmPass = !filterPriceKmActive || (pricePerKm >= minPricePerKm);
+                        boolean totalPass = !filterTotalPriceActive || (totalPrice >= minPrice);
+                        if (togglePriceAnd) {
+                            pricePass = kmPass && totalPass;
+                        } else {
+                            pricePass = kmPass || totalPass;
+                        }
+                    }
+
+                    boolean finalAccept = true;
+                    if (hasDistFilters && hasPriceFilters) {
+                        finalAccept = toggleDistPriceAnd ? (distPass && pricePass) : (distPass || pricePass);
+                    } else if (hasDistFilters) {
+                        finalAccept = distPass;
+                    } else if (hasPriceFilters) {
+                        finalAccept = pricePass;
+                    } else if (!hasDistFilters && !hasPriceFilters) {
+                        // Fallback to old behavior if no toggles are active
+                        finalAccept = (pickupKm >= minPickup && pickupKm <= maxPickup && dropKm >= minDrop && dropKm <= maxDrop);
+                    }
+
+                    if (finalAccept) {
                         targetNode = button;
                         break; // Found a valid order!
                     } else {
-                        uiHandler.post(() -> android.widget.Toast.makeText(this, "Ignored an order: Distances out of bounds", android.widget.Toast.LENGTH_SHORT).show());
+                        uiHandler.post(() -> android.widget.Toast.makeText(this, "Ignored: Filter limits exceeded", android.widget.Toast.LENGTH_SHORT).show());
                     }
                 } else {
                     // If it can't find distances on the card, we accept it by default so we don't break

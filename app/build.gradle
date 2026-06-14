@@ -1,10 +1,26 @@
 plugins {
     id "com.android.application"
+    id "com.google.gms.google-services"
 }
 
 android {
     namespace "com.triplencse.acceptassist"
     compileSdk 35
+
+    signingConfigs {
+        debug {
+            storeFile file('upload-keystore.jks')
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "android"
+            keyAlias System.getenv("KEY_ALIAS") ?: "upload"
+            keyPassword System.getenv("KEY_PASSWORD") ?: "android"
+        }
+        release {
+            storeFile file('upload-keystore.jks')
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "android"
+            keyAlias System.getenv("KEY_ALIAS") ?: "upload"
+            keyPassword System.getenv("KEY_PASSWORD") ?: "android"
+        }
+    }
 
     defaultConfig {
         applicationId "com.triplencse.acceptassist"
@@ -13,4 +29,21 @@ android {
         versionCode 1
         versionName "1.0"
     }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    implementation platform('com.google.firebase:firebase-bom:33.1.2')
+    implementation 'com.google.firebase:firebase-auth'
+    implementation 'com.google.android.gms:play-services-auth:21.2.0'
 }

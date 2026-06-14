@@ -9,6 +9,14 @@ final class AcceptPrefs {
     static final String KEY_MAX_PICKUP = "max_pickup";
     static final String KEY_MIN_DROP = "min_drop";
     static final String KEY_MAX_DROP = "max_drop";
+    static final String KEY_MIN_PRICE_PER_KM = "min_price_per_km";
+    static final String KEY_MIN_PRICE = "min_price";
+    static final String KEY_TOGGLE_PRICE_AND = "toggle_price_and";
+    static final String KEY_TOGGLE_DIST_PRICE_AND = "toggle_dist_price_and";
+    static final String KEY_FILTER_MAX_PICKUP_ACTIVE = "filter_max_pickup_active";
+    static final String KEY_FILTER_DROP_ACTIVE = "filter_drop_active";
+    static final String KEY_FILTER_PRICE_KM_ACTIVE = "filter_price_km_active";
+    static final String KEY_FILTER_TOTAL_PRICE_ACTIVE = "filter_total_price_active";
     static final String KEY_LAST_CLICK_MS = "last_click_ms";
     static final String KEY_APP_MODE = "app_mode";
     static final String KEY_CUSTOM_PACKAGE = "custom_package";
@@ -31,6 +39,14 @@ final class AcceptPrefs {
                     .putFloat(KEY_MAX_PICKUP, 5.0f)
                     .putFloat(KEY_MIN_DROP, 0.0f)
                     .putFloat(KEY_MAX_DROP, 15.0f)
+                    .putFloat(KEY_MIN_PRICE_PER_KM, 0.0f)
+                    .putFloat(KEY_MIN_PRICE, 0.0f)
+                    .putBoolean(KEY_TOGGLE_PRICE_AND, false)
+                    .putBoolean(KEY_TOGGLE_DIST_PRICE_AND, false)
+                    .putBoolean(KEY_FILTER_MAX_PICKUP_ACTIVE, false)
+                    .putBoolean(KEY_FILTER_DROP_ACTIVE, false)
+                    .putBoolean(KEY_FILTER_PRICE_KM_ACTIVE, false)
+                    .putBoolean(KEY_FILTER_TOTAL_PRICE_ACTIVE, false)
                     .apply();
         }
         if (!prefs.contains(KEY_APP_MODE)) {
