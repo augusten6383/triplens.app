@@ -41,7 +41,9 @@
                 android:text="Start Autoclicker"
                 android:textAllCaps="false"
                 android:textSize="18sp"
+                android:textColor="@android:color/white"
                 app:icon="@android:drawable/ic_media_play"
+                app:iconTint="@android:color/white"
                 app:iconGravity="textStart"
                 app:iconSize="24dp"
                 app:cornerRadius="12dp"
@@ -199,21 +201,6 @@
                 android:text="Dashboard"
                 android:textColor="@color/colorSuccess"
                 android:textStyle="bold"
-                android:textSize="12sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/navFilters"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:orientation="vertical">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Filters"
-                android:textColor="@color/colorTextSecondary"
                 android:textSize="12sp" />
         </LinearLayout>
 

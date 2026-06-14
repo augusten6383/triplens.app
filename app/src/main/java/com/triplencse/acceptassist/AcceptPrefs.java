@@ -62,7 +62,7 @@ final class AcceptPrefs {
                     .putString(KEY_TURSO_TOKEN, "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODAyNTc1ODEsImlkIjoiMDE5ZTdmOWUtYjEwMS03MjMwLThjYWQtNTRmZjllNmI3ZWU4IiwicmlkIjoiYTEzZDg3YmYtOTdkOS00NjMwLWJkMGYtMjNjN2FkMWJhZmNjIn0.i4RsyjzDOZenpkfXj7HcCK8DCuE3usirajqfaAV3uxuKYfNK2GtzO6n9QBuq0SDwof9azXIQH68c535mM7_YDw")
                     .putString(KEY_LOGGED_IN_USER, "")
                     .putString(KEY_USER_STATUS, "active")
-                    .putInt(KEY_FREE_CLICKS, 1)
+                    .putInt(KEY_FREE_CLICKS, 0)
                     .putLong(KEY_SUB_EXPIRES, 0L)
                     .apply();
         }

@@ -226,7 +226,7 @@ public final class TursoHelper {
             @Override public void onSuccess(JSONArray rows) {}
             @Override public void onError(String message) {}
         });
-        executePipeline(ctx, "ALTER TABLE users ADD COLUMN free_clicks_remaining INTEGER DEFAULT 1;", new ArrayList<>(), new Callback() {
+        executePipeline(ctx, "ALTER TABLE users ADD COLUMN free_clicks_remaining INTEGER DEFAULT 0;", new ArrayList<>(), new Callback() {
             @Override public void onSuccess(JSONArray rows) {}
             @Override public void onError(String message) {}
         });
@@ -246,7 +246,7 @@ public final class TursoHelper {
                 "recovery_question TEXT, " +
                 "recovery_answer TEXT, " +
                 "status TEXT DEFAULT 'active', " +
-                "free_clicks_remaining INTEGER DEFAULT 1, " +
+                "free_clicks_remaining INTEGER DEFAULT 0, " +
                 "subscription_expires_at INTEGER DEFAULT 0" +
                 ");";
         executePipeline(ctx, sql, new ArrayList<>(), new Callback() {
@@ -264,7 +264,8 @@ public final class TursoHelper {
     }
 
     public static void signUpUser(Context ctx, String username, String email, String phone, String password, String question, String answer, Callback callback) {
-        String sql = "INSERT INTO users (username, email, phone, password, recovery_question, recovery_answer, status, free_clicks_remaining, subscription_expires_at) VALUES (?, ?, ?, ?, ?, ?, 'active', 1, 0);";
+        long threeDaysSeconds = (System.currentTimeMillis() / 1000L) + (3 * 24 * 60 * 60);
+        String sql = "INSERT INTO users (username, email, phone, password, recovery_question, recovery_answer, status, free_clicks_remaining, subscription_expires_at) VALUES (?, ?, ?, ?, ?, ?, 'active', 0, ?);";
         List<Object> args = new ArrayList<>();
         args.add(username.trim().toLowerCase());
         args.add(email.trim().toLowerCase());
@@ -272,6 +273,7 @@ public final class TursoHelper {
         args.add(hashPassword(password));
         args.add(question.trim());
         args.add(answer.trim().toLowerCase());
+        args.add(threeDaysSeconds);
         executePipeline(ctx, sql, args, callback);
     }
 
@@ -391,10 +393,12 @@ public final class TursoHelper {
                 if (rows != null && rows.length() > 0) {
                     callback.onSuccess(rows);
                 } else {
-                    String insertSql = "INSERT INTO users (username, email, phone, password, recovery_question, recovery_answer, status, free_clicks_remaining, subscription_expires_at) VALUES (?, ?, '', '', '', '', 'active', 1, 0);";
+                    long threeDaysSeconds = (System.currentTimeMillis() / 1000L) + (3 * 24 * 60 * 60);
+                    String insertSql = "INSERT INTO users (username, email, phone, password, recovery_question, recovery_answer, status, free_clicks_remaining, subscription_expires_at) VALUES (?, ?, '', '', '', '', 'active', 0, ?);";
                     List<Object> insertArgs = new ArrayList<>();
                     insertArgs.add(emailLower);
                     insertArgs.add(emailLower);
+                    insertArgs.add(threeDaysSeconds);
                     executePipeline(ctx, insertSql, insertArgs, new Callback() {
                         @Override
                         public void onSuccess(JSONArray insertRows) {

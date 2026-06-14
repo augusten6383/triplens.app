@@ -53,15 +53,15 @@ public class MainActivity extends Activity {
     private LinearLayout distanceFiltersContainer;
     private LinearLayout customAppContainer;
 
-    // Design Tokens - Premium Dark Theme
-    private static final int COLOR_BG = Color.rgb(15, 23, 30); // Deep background
-    private static final int COLOR_CARD = Color.rgb(26, 36, 47); // Card surface
-    private static final int COLOR_INPUT_BG = Color.rgb(33, 45, 59); // Input field background
-    private static final int COLOR_BORDER = Color.rgb(52, 70, 92); // Input border
-    private static final int COLOR_ACCENT = Color.rgb(45, 104, 255); // Vibrant Blue for primary actions
+    // Design Tokens - Premium Light Theme
+    private static final int COLOR_BG = Color.rgb(248, 250, 252); // #F8FAFC
+    private static final int COLOR_CARD = Color.rgb(255, 255, 255); // #FFFFFF
+    private static final int COLOR_INPUT_BG = Color.rgb(241, 245, 249); // #F1F5F9
+    private static final int COLOR_BORDER = Color.rgb(226, 232, 240); // #E2E8F0
+    private static final int COLOR_ACCENT = Color.rgb(37, 99, 235); // Vibrant Blue for primary actions
     private static final int COLOR_SUCCESS = Color.rgb(16, 185, 129); // Emerald green for active states
-    private static final int COLOR_TEXT_PRIMARY = Color.rgb(243, 244, 246); // Title / primary text
-    private static final int COLOR_TEXT_SECONDARY = Color.rgb(156, 163, 175); // Subtitles / secondary text
+    private static final int COLOR_TEXT_PRIMARY = Color.rgb(15, 23, 42); // Title / primary text
+    private static final int COLOR_TEXT_SECONDARY = Color.rgb(100, 116, 139); // Subtitles / secondary text
     private static final int COLOR_DANGER = Color.rgb(239, 68, 68); // Soft red
     private static final int COLOR_WARNING = Color.rgb(245, 158, 11); // Soft orange
 
@@ -552,33 +552,66 @@ public class MainActivity extends Activity {
         TextView forgotPassBtn = view.findViewById(R.id.btnForgotPass);
 
         loginBtn.setOnClickListener(v -> {
-            String user = emailEdit.getText().toString().trim();
+            String email = emailEdit.getText().toString().trim();
             String pass = passEdit.getText().toString();
-            if (user.isEmpty() || pass.isEmpty()) {
+            if (email.isEmpty() || pass.isEmpty()) {
                 Toast.makeText(this, "Please enter your email and password", Toast.LENGTH_SHORT).show();
                 return;
             }
 
             Toast.makeText(this, "Logging in...", Toast.LENGTH_SHORT).show();
-            TursoHelper.loginUser(this, user, pass, new TursoHelper.Callback() {
-                @Override
-                public void onSuccess(org.json.JSONArray rows) {
-                    try {
-                        org.json.JSONArray firstRow = rows.getJSONArray(0);
-                        String username = TursoHelper.getValueAsString(firstRow.getJSONObject(0));
-                        prefs.edit().putString(AcceptPrefs.KEY_LOGGED_IN_USER, username).apply();
-                        Toast.makeText(MainActivity.this, "Welcome " + username + "!", Toast.LENGTH_SHORT).show();
-                        navigateToScreen();
-                    } catch (Exception ex) {
-                        Toast.makeText(MainActivity.this, "Login error: " + ex.getMessage(), Toast.LENGTH_SHORT).show();
-                    }
-                }
+            mAuth.signInWithEmailAndPassword(email, pass)
+                .addOnCompleteListener(this, task -> {
+                    if (task.isSuccessful()) {
+                        FirebaseUser user = mAuth.getCurrentUser();
+                        if (user != null) {
+                            if (user.isEmailVerified()) {
+                                TursoHelper.googleSignInUser(MainActivity.this, user.getEmail(), new TursoHelper.Callback() {
+                                    @Override
+                                    public void onSuccess(org.json.JSONArray rows) {
+                                        try {
+                                            prefs.edit().putString(AcceptPrefs.KEY_LOGGED_IN_USER, user.getEmail()).apply();
+                                            Toast.makeText(MainActivity.this, "Welcome " + user.getEmail() + "!", Toast.LENGTH_SHORT).show();
+                                            navigateToScreen();
+                                        } catch (Exception ex) {
+                                            Toast.makeText(MainActivity.this, "Login error", Toast.LENGTH_SHORT).show();
+                                        }
+                                    }
+                                    @Override
+                                    public void onError(String message) {
+                                        Toast.makeText(MainActivity.this, "Server sync failed: " + message, Toast.LENGTH_LONG).show();
+                                    }
+                                });
+                            } else {
+                                long lastResend = prefs.getLong("last_verification_resend", 0L);
+                                long now = System.currentTimeMillis();
+                                long cooldownMs = 60000; // 1 minute cooldown
 
-                @Override
-                public void onError(String message) {
-                    Toast.makeText(MainActivity.this, "Login failed: " + message, Toast.LENGTH_LONG).show();
-                }
-            });
+                                new android.app.AlertDialog.Builder(MainActivity.this)
+                                    .setTitle("Email Not Verified")
+                                    .setMessage("Please verify your email address before logging in. Check your inbox or spam folder.")
+                                    .setPositiveButton("Resend Email", (dialog, which) -> {
+                                        if (now - lastResend < cooldownMs) {
+                                            long waitSec = (cooldownMs - (now - lastResend)) / 1000;
+                                            Toast.makeText(MainActivity.this, "Please wait " + waitSec + " seconds before resending.", Toast.LENGTH_SHORT).show();
+                                            mAuth.signOut();
+                                        } else {
+                                            user.sendEmailVerification().addOnCompleteListener(t -> {
+                                                Toast.makeText(MainActivity.this, "Verification email resent! Please check your inbox.", Toast.LENGTH_LONG).show();
+                                                prefs.edit().putLong("last_verification_resend", System.currentTimeMillis()).apply();
+                                                mAuth.signOut();
+                                            });
+                                        }
+                                    })
+                                    .setNegativeButton("Cancel", (dialog, which) -> mAuth.signOut())
+                                    .setCancelable(false)
+                                    .show();
+                            }
+                        }
+                    } else {
+                        Toast.makeText(this, "Login failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                });
         });
 
         signUpBtn.setOnClickListener(v -> setContentView(buildSignUpView()));
@@ -642,234 +675,75 @@ public class MainActivity extends Activity {
     }
 
     private View buildSignUpView() {
-        ScrollView scrollView = new ScrollView(this);
-        scrollView.setFillViewport(true);
+        View view = getLayoutInflater().inflate(R.layout.activity_signup, null);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(24), dp(30), dp(24), dp(30));
-        root.setBackgroundColor(COLOR_BG);
-        scrollView.addView(root);
+        EditText emailEdit = view.findViewById(R.id.editSignUpEmail);
+        EditText passEdit = view.findViewById(R.id.editSignUpPassword);
+        com.google.android.material.button.MaterialButton submitBtn = view.findViewById(R.id.btnSignUpSubmit);
+        TextView backBtn = view.findViewById(R.id.btnBackToLogin);
 
-        TextView title = new TextView(this);
-        title.setText("Create Account");
-        title.setTextColor(COLOR_TEXT_PRIMARY);
-        title.setTextSize(30);
-        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        root.addView(title, matchWrap());
-
-        TextView desc = new TextView(this);
-        desc.setText("Please register with unique details to continue");
-        desc.setTextColor(COLOR_TEXT_SECONDARY);
-        desc.setTextSize(14);
-        desc.setPadding(0, dp(4), 0, dp(24));
-        root.addView(desc, matchWrap());
-
-        root.addView(label("Username"), matchWrap());
-        EditText userEdit = input("");
-        root.addView(userEdit, matchWrapWithTop(6));
-
-        root.addView(label("Email Address"), matchWrapWithTop(14));
-        EditText emailEdit = input("");
-        emailEdit.setInputType(InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
-        root.addView(emailEdit, matchWrapWithTop(6));
-
-        root.addView(label("Phone Number"), matchWrapWithTop(14));
-        EditText phoneEdit = input("");
-        phoneEdit.setInputType(InputType.TYPE_CLASS_PHONE);
-        root.addView(phoneEdit, matchWrapWithTop(6));
-
-        root.addView(label("Password"), matchWrapWithTop(14));
-        EditText passEdit = input("");
-        passEdit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        root.addView(passEdit, matchWrapWithTop(6));
-
-        root.addView(label("Security Question"), matchWrapWithTop(14));
-        EditText questionEdit = input("");
-        questionEdit.setHint("e.g. What is your pet's name?");
-        root.addView(questionEdit, matchWrapWithTop(6));
-
-        root.addView(label("Answer to Security Question"), matchWrapWithTop(14));
-        EditText answerEdit = input("");
-        answerEdit.setHint("Answer is case-insensitive");
-        root.addView(answerEdit, matchWrapWithTop(6));
-
-        Button registerBtn = primaryButton("Register Account");
-        registerBtn.setOnClickListener(v -> {
-            String user = userEdit.getText().toString().trim();
+        submitBtn.setOnClickListener(v -> {
             String email = emailEdit.getText().toString().trim();
-            String phone = phoneEdit.getText().toString().trim();
             String pass = passEdit.getText().toString();
-            String question = questionEdit.getText().toString().trim();
-            String answer = answerEdit.getText().toString().trim();
 
-            if (user.isEmpty() || email.isEmpty() || phone.isEmpty() || pass.isEmpty() || question.isEmpty() || answer.isEmpty()) {
-                Toast.makeText(this, "All fields are required", Toast.LENGTH_SHORT).show();
+            if (email.isEmpty() || pass.isEmpty()) {
+                Toast.makeText(this, "Email and password are required", Toast.LENGTH_SHORT).show();
                 return;
             }
 
             Toast.makeText(this, "Creating account...", Toast.LENGTH_SHORT).show();
-            TursoHelper.signUpUser(this, user, email, phone, pass, question, answer, new TursoHelper.Callback() {
-                @Override
-                public void onSuccess(org.json.JSONArray rows) {
-                    Toast.makeText(MainActivity.this, "Registration successful! Please log in.", Toast.LENGTH_LONG).show();
-                    setContentView(buildLoginView());
-                }
-
-                @Override
-                public void onError(String message) {
-                    String userFriendlyMessage = message;
-                    if (message.contains("UNIQUE constraint failed")) {
-                        if (message.contains("users.username")) {
-                            userFriendlyMessage = "Username is already registered";
-                        } else if (message.contains("users.email")) {
-                            userFriendlyMessage = "Email address is already registered";
-                        } else if (message.contains("users.phone")) {
-                            userFriendlyMessage = "Phone number is already registered";
-                        } else {
-                            userFriendlyMessage = "Details must be unique. One of your inputs is already taken.";
+            mAuth.createUserWithEmailAndPassword(email, pass)
+                .addOnCompleteListener(this, task -> {
+                    if (task.isSuccessful()) {
+                        FirebaseUser user = mAuth.getCurrentUser();
+                        if (user != null) {
+                            user.sendEmailVerification()
+                                .addOnCompleteListener(t -> {
+                                    Toast.makeText(MainActivity.this, "Registration successful! Please check your email to verify your account.", Toast.LENGTH_LONG).show();
+                                    mAuth.signOut();
+                                    setContentView(buildLoginView());
+                                });
                         }
+                    } else {
+                        Toast.makeText(this, "Sign Up Failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
                     }
-                    Toast.makeText(MainActivity.this, "Sign Up Failed: " + userFriendlyMessage, Toast.LENGTH_LONG).show();
-                }
-            });
+                });
         });
-        root.addView(registerBtn, matchWrapWithTop(28));
 
-        Button backBtn = textLinkButton("Back to Log In");
         backBtn.setOnClickListener(v -> setContentView(buildLoginView()));
-        root.addView(backBtn, matchWrapWithTop(16));
 
-        return scrollView;
+        return view;
     }
 
     private View buildRecoveryView() {
-        ScrollView scrollView = new ScrollView(this);
-        scrollView.setFillViewport(true);
+        View view = getLayoutInflater().inflate(R.layout.activity_recovery, null);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(24), dp(30), dp(24), dp(30));
-        root.setBackgroundColor(COLOR_BG);
-        scrollView.addView(root);
+        EditText emailEdit = view.findViewById(R.id.editRecoveryEmail);
+        com.google.android.material.button.MaterialButton submitBtn = view.findViewById(R.id.btnRecoverySubmit);
+        TextView backBtn = view.findViewById(R.id.btnRecoveryBack);
 
-        TextView title = new TextView(this);
-        title.setText("Recover Password");
-        title.setTextColor(COLOR_TEXT_PRIMARY);
-        title.setTextSize(30);
-        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        root.addView(title, matchWrap());
-
-        TextView desc = new TextView(this);
-        desc.setText("Verify your details to reset your password");
-        desc.setTextColor(COLOR_TEXT_SECONDARY);
-        desc.setTextSize(14);
-        desc.setPadding(0, dp(4), 0, dp(24));
-        root.addView(desc, matchWrap());
-
-        root.addView(label("Username or Email"), matchWrap());
-        EditText searchInput = input("");
-        searchInput.setHint("Enter registered username or email");
-        root.addView(searchInput, matchWrapWithTop(6));
-
-        LinearLayout step2Container = new LinearLayout(this);
-        step2Container.setOrientation(LinearLayout.VERTICAL);
-        step2Container.setVisibility(View.GONE);
-
-        TextView questionText = new TextView(this);
-        questionText.setTextSize(16);
-        questionText.setTextColor(COLOR_ACCENT);
-        questionText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        questionText.setPadding(dp(12), dp(10), dp(12), dp(10));
-        questionText.setBackground(roundedRect(COLOR_INPUT_BG, 8));
-        
-        step2Container.addView(label("Your Security Question:"), matchWrapWithTop(16));
-        step2Container.addView(questionText, matchWrapWithTop(6));
-
-        step2Container.addView(label("Security Answer"), matchWrapWithTop(16));
-        EditText answerInput = input("");
-        answerInput.setHint("Enter security question answer");
-        step2Container.addView(answerInput, matchWrapWithTop(6));
-
-        step2Container.addView(label("New Password"), matchWrapWithTop(16));
-        EditText newPassInput = input("");
-        newPassInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        newPassInput.setHint("••••••••");
-        step2Container.addView(newPassInput, matchWrapWithTop(6));
-
-        root.addView(step2Container, matchWrap());
-
-        Button step1Btn = primaryButton("Fetch Security Question");
-        step1Btn.setOnClickListener(v -> {
-            String userStr = searchInput.getText().toString().trim();
-            if (userStr.isEmpty()) {
-                Toast.makeText(this, "Please enter your username or email", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            Toast.makeText(this, "Fetching question...", Toast.LENGTH_SHORT).show();
-            TursoHelper.getRecoveryQuestion(this, userStr, new TursoHelper.Callback() {
-                @Override
-                public void onSuccess(org.json.JSONArray rows) {
-                    if (rows == null || rows.length() == 0) {
-                        Toast.makeText(MainActivity.this, "User not found", Toast.LENGTH_LONG).show();
-                        return;
-                    }
-                    try {
-                        org.json.JSONArray firstRow = rows.getJSONArray(0);
-                        String question = TursoHelper.getValueAsString(firstRow.getJSONObject(0));
-                        if (question == null || question.trim().isEmpty()) {
-                            Toast.makeText(MainActivity.this, "This user does not have a security question configured.", Toast.LENGTH_LONG).show();
-                        } else {
-                            questionText.setText(question);
-                            step2Container.setVisibility(View.VISIBLE);
-                            step1Btn.setVisibility(View.GONE);
-                            searchInput.setEnabled(false);
-                        }
-                    } catch (Exception ex) {
-                        Toast.makeText(MainActivity.this, "Error: " + ex.getMessage(), Toast.LENGTH_SHORT).show();
-                    }
-                }
-
-                @Override
-                public void onError(String message) {
-                    Toast.makeText(MainActivity.this, "Error fetching details: " + message, Toast.LENGTH_LONG).show();
-                }
-            });
-        });
-        root.addView(step1Btn, matchWrapWithTop(20));
-
-        Button resetBtn = primaryButton("Reset Password");
-        resetBtn.setOnClickListener(v -> {
-            String userStr = searchInput.getText().toString().trim();
-            String answer = answerInput.getText().toString().trim();
-            String newPass = newPassInput.getText().toString();
-
-            if (answer.isEmpty() || newPass.isEmpty()) {
-                Toast.makeText(this, "Please fill in all recovery fields", Toast.LENGTH_SHORT).show();
+        submitBtn.setOnClickListener(v -> {
+            String email = emailEdit.getText().toString().trim();
+            if (email.isEmpty()) {
+                Toast.makeText(this, "Please enter your email", Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            Toast.makeText(this, "Resetting password...", Toast.LENGTH_SHORT).show();
-            TursoHelper.resetPassword(this, userStr, answer, newPass, new TursoHelper.Callback() {
-                @Override
-                public void onSuccess(org.json.JSONArray rows) {
-                    Toast.makeText(MainActivity.this, "Password reset successfully! Please log in.", Toast.LENGTH_LONG).show();
-                    setContentView(buildLoginView());
-                }
-
-                @Override
-                public void onError(String message) {
-                    Toast.makeText(MainActivity.this, "Reset failed: " + message, Toast.LENGTH_LONG).show();
-                }
-            });
+            Toast.makeText(this, "Sending reset link...", Toast.LENGTH_SHORT).show();
+            mAuth.sendPasswordResetEmail(email)
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        Toast.makeText(MainActivity.this, "Reset link sent to your email.", Toast.LENGTH_LONG).show();
+                        setContentView(buildLoginView());
+                    } else {
+                        Toast.makeText(MainActivity.this, "Failed to send reset link: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                });
         });
-        step2Container.addView(resetBtn, matchWrapWithTop(28));
 
-        Button backBtn = textLinkButton("Back to Log In");
         backBtn.setOnClickListener(v -> setContentView(buildLoginView()));
-        root.addView(backBtn, matchWrapWithTop(16));
 
-        return scrollView;
+        return view;
     }
 
     private View buildDashboardView() {
@@ -927,6 +801,11 @@ public class MainActivity extends Activity {
         // Fill sub info
         long expires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
         subExpires.setText("Expires: " + formatExpiry(expires));
+
+        LinearLayout navProfile = view.findViewById(R.id.navProfile);
+        if (navProfile != null) {
+            navProfile.setOnClickListener(v -> setContentView(buildProfileView()));
+        }
 
         return view;
     }
@@ -1688,97 +1567,73 @@ public class MainActivity extends Activity {
         return root;
     }
 
-    private View buildSubscriptionView() {
-        ScrollView scrollView = new ScrollView(this);
-        scrollView.setFillViewport(true);
+    private View buildProfileView() {
+        View view = getLayoutInflater().inflate(R.layout.activity_profile, null);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(24), dp(20), dp(24));
-        root.setBackgroundColor(COLOR_BG);
-        scrollView.addView(root);
-
-        TextView title = new TextView(this);
-        title.setText("Premium Required");
-        title.setTextColor(COLOR_TEXT_PRIMARY);
-        title.setTextSize(28);
-        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        title.setGravity(Gravity.CENTER);
-        root.addView(title, matchWrap());
-
+        TextView userTxt = view.findViewById(R.id.textProfileUser);
+        TextView subStatus = view.findViewById(R.id.textProfileSubStatus);
+        TextView accStatus = view.findViewById(R.id.textProfileAccStatus);
+        
         String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "User");
-        TextView userSessionText = new TextView(this);
-        userSessionText.setText("Logged in as: " + loggedInUser);
-        userSessionText.setTextColor(COLOR_TEXT_SECONDARY);
-        userSessionText.setTextSize(14);
-        userSessionText.setGravity(Gravity.CENTER);
-        userSessionText.setPadding(0, dp(4), 0, dp(12));
-        root.addView(userSessionText, matchWrap());
+        userTxt.setText(loggedInUser);
 
-        int freeClicks = prefs.getInt(AcceptPrefs.KEY_FREE_CLICKS, 0);
-        TextView trialStatusText = new TextView(this);
-        if (freeClicks > 0) {
-            trialStatusText.setText("Trial Status: " + freeClicks + " free click" + (freeClicks > 1 ? "s" : "") + " remaining");
-            trialStatusText.setTextColor(COLOR_ACCENT);
+        long expires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
+        if (expires > (System.currentTimeMillis() / 1000L)) {
+            subStatus.setText("Active Premium");
         } else {
-            trialStatusText.setText("Trial Status: Free clicks exhausted");
-            trialStatusText.setTextColor(COLOR_DANGER);
+            subStatus.setText("Free / Expired");
         }
-        trialStatusText.setTextSize(15);
-        trialStatusText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        trialStatusText.setGravity(Gravity.CENTER);
-        trialStatusText.setPadding(0, dp(6), 0, dp(20));
-        root.addView(trialStatusText, matchWrap());
 
-        // Plans Section
-        TextView plansHeader = label("Available Subscription Plans");
-        plansHeader.setGravity(Gravity.CENTER);
-        plansHeader.setPadding(0, 0, 0, dp(10));
-        root.addView(plansHeader, matchWrap());
+        if (isAccessibilityServiceEnabled()) {
+            accStatus.setText("Service Active");
+        } else {
+            accStatus.setText("Tap to enable in Settings");
+        }
 
-        // Card 1: 20 / Day
-        root.addView(buildPlanCard("Day Pass", "₹20 / day", "Great for quick trials or temporary usage"), matchWrapWithTop(10));
-        
-        // Card 2: 99 / Week
-        root.addView(buildPlanCard("Week Pass", "₹99 / week", "Perfect for regular weekly work schedules"), matchWrapWithTop(10));
-        
-        // Card 3: 299 / Month
-        root.addView(buildPlanCard("Month Pass", "₹299 / month", "Best value. Unrestricted access for a full month"), matchWrapWithTop(10));
-
-        // Demo Activation Button
-        Button demoBtn = new Button(this);
-        demoBtn.setText("Demo: Activate Trial (Add 1 Day Premium)");
-        demoBtn.setBackground(roundedRect(COLOR_ACCENT, 10));
-        demoBtn.setTextColor(Color.WHITE);
-        demoBtn.setAllCaps(false);
-        demoBtn.setTextSize(16);
-        demoBtn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        demoBtn.setPadding(0, dp(14), 0, dp(14));
-        demoBtn.setOnClickListener(v -> {
-            Toast.makeText(this, "Activating 1-day demo subscription...", Toast.LENGTH_SHORT).show();
-            TursoHelper.demoActivateSubscription(this, loggedInUser, 1, new TursoHelper.Callback() {
-                @Override
-                public void onSuccess(org.json.JSONArray rows) {
-                    Toast.makeText(MainActivity.this, "Demo subscription activated successfully!", Toast.LENGTH_LONG).show();
-                    proceedNavigation();
-                }
-
-                @Override
-                public void onError(String message) {
-                    Toast.makeText(MainActivity.this, "Failed to activate demo: " + message, Toast.LENGTH_LONG).show();
-                }
-            });
-        });
-        root.addView(demoBtn, matchWrapWithTop(28));
-
-        Button logoutBtn = textLinkButton("Log Out");
-        logoutBtn.setOnClickListener(v -> {
+        view.findViewById(R.id.cardSubscription).setOnClickListener(v -> setContentView(buildSubscriptionView()));
+        view.findViewById(R.id.cardAccessibility).setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+        view.findViewById(R.id.cardLogout).setOnClickListener(v -> {
             prefs.edit().putString(AcceptPrefs.KEY_LOGGED_IN_USER, "").apply();
+            Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show();
             navigateToScreen();
         });
-        root.addView(logoutBtn, matchWrapWithTop(16));
 
-        return scrollView;
+        LinearLayout navDash = view.findViewById(R.id.navDashboard);
+        if (navDash != null) {
+            navDash.setOnClickListener(v -> setContentView(buildDashboardView()));
+        }
+
+        return view;
+    }
+
+    private View buildSubscriptionView() {
+        View view = getLayoutInflater().inflate(R.layout.activity_subscription, null);
+
+        TextView daysLeft = view.findViewById(R.id.textDaysLeft);
+        TextView subMsg = view.findViewById(R.id.textSubMsg);
+
+        long expires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
+        long now = System.currentTimeMillis() / 1000L;
+        if (expires > now) {
+            long diff = expires - now;
+            long days = diff / (60 * 60 * 24);
+            daysLeft.setText(String.valueOf(days));
+            subMsg.setText("Your Pro subscription is active.\nAutomation logs are being processed in real-time.");
+        } else {
+            daysLeft.setText("0");
+            subMsg.setText("Your subscription has expired.\nPlease renew to continue auto-accepting.");
+        }
+
+        LinearLayout navDash = view.findViewById(R.id.navDashboard);
+        if (navDash != null) {
+            navDash.setOnClickListener(v -> setContentView(buildDashboardView()));
+        }
+        LinearLayout navProf = view.findViewById(R.id.navProfile);
+        if (navProf != null) {
+            navProf.setOnClickListener(v -> setContentView(buildProfileView()));
+        }
+
+        return view;
     }
 
     private View buildPlanCard(String name, String price, String desc) {
