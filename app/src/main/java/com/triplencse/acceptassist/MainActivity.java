@@ -58,7 +58,8 @@ public class MainActivity extends Activity {
     private static final int COLOR_CARD = Color.rgb(26, 36, 47); // Card surface
     private static final int COLOR_INPUT_BG = Color.rgb(33, 45, 59); // Input field background
     private static final int COLOR_BORDER = Color.rgb(52, 70, 92); // Input border
-    private static final int COLOR_ACCENT = Color.rgb(16, 185, 129); // Vibrant emerald green
+    private static final int COLOR_ACCENT = Color.rgb(45, 104, 255); // Vibrant Blue for primary actions
+    private static final int COLOR_SUCCESS = Color.rgb(16, 185, 129); // Emerald green for active states
     private static final int COLOR_TEXT_PRIMARY = Color.rgb(243, 244, 246); // Title / primary text
     private static final int COLOR_TEXT_SECONDARY = Color.rgb(156, 163, 175); // Subtitles / secondary text
     private static final int COLOR_DANGER = Color.rgb(239, 68, 68); // Soft red
@@ -541,49 +542,20 @@ public class MainActivity extends Activity {
     }
 
     private View buildLoginView() {
-        ScrollView scrollView = new ScrollView(this);
-        scrollView.setFillViewport(true);
+        View view = getLayoutInflater().inflate(R.layout.activity_login, null);
+        
+        EditText emailEdit = view.findViewById(R.id.editEmail);
+        EditText passEdit = view.findViewById(R.id.editPassword);
+        com.google.android.material.button.MaterialButton loginBtn = view.findViewById(R.id.btnLogin);
+        com.google.android.material.button.MaterialButton googleBtn = view.findViewById(R.id.btnGoogleLogin);
+        TextView signUpBtn = view.findViewById(R.id.btnSignUp);
+        TextView forgotPassBtn = view.findViewById(R.id.btnForgotPass);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(24), dp(40), dp(24), dp(40));
-        root.setBackgroundColor(COLOR_BG);
-        root.setGravity(Gravity.CENTER_VERTICAL);
-        scrollView.addView(root);
-
-        TextView title = new TextView(this);
-        title.setText("Triplens");
-        title.setTextColor(COLOR_TEXT_PRIMARY);
-        title.setTextSize(40);
-        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        title.setGravity(Gravity.CENTER);
-        root.addView(title, matchWrap());
-
-        TextView subtitle = new TextView(this);
-        subtitle.setText("Enter credentials to access settings");
-        subtitle.setTextColor(COLOR_TEXT_SECONDARY);
-        subtitle.setTextSize(15);
-        subtitle.setGravity(Gravity.CENTER);
-        subtitle.setPadding(0, dp(6), 0, dp(36));
-        root.addView(subtitle, matchWrap());
-
-        root.addView(label("Username or Email"), matchWrap());
-        EditText loginInput = input("");
-        loginInput.setHint("Enter username or email");
-        root.addView(loginInput, matchWrapWithTop(6));
-
-        root.addView(label("Password"), matchWrapWithTop(18));
-        EditText passInput = input("");
-        passInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        passInput.setHint("••••••••");
-        root.addView(passInput, matchWrapWithTop(6));
-
-        Button loginBtn = primaryButton("Log In");
         loginBtn.setOnClickListener(v -> {
-            String user = loginInput.getText().toString().trim();
-            String pass = passInput.getText().toString();
+            String user = emailEdit.getText().toString().trim();
+            String pass = passEdit.getText().toString();
             if (user.isEmpty() || pass.isEmpty()) {
-                Toast.makeText(this, "Please enter your username and password", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Please enter your email and password", Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -608,24 +580,16 @@ public class MainActivity extends Activity {
                 }
             });
         });
-        root.addView(loginBtn, matchWrapWithTop(28));
 
-        Button signUpLink = textLinkButton("Create New Account");
-        signUpLink.setOnClickListener(v -> setContentView(buildSignUpView()));
-        root.addView(signUpLink, matchWrapWithTop(16));
-
-        Button forgotLink = textLinkButton("Forgot Password?");
-        forgotLink.setOnClickListener(v -> setContentView(buildRecoveryView()));
-        root.addView(forgotLink, matchWrapWithTop(8));
-
-        Button googleSignInBtn = secondaryButton("Continue with Google");
-        googleSignInBtn.setOnClickListener(v -> {
+        signUpBtn.setOnClickListener(v -> setContentView(buildSignUpView()));
+        forgotPassBtn.setOnClickListener(v -> setContentView(buildRecoveryView()));
+        
+        googleBtn.setOnClickListener(v -> {
             Intent signInIntent = mGoogleSignInClient.getSignInIntent();
             startActivityForResult(signInIntent, RC_SIGN_IN);
         });
-        root.addView(googleSignInBtn, matchWrapWithTop(16));
 
-        return scrollView;
+        return view;
     }
 
     @Override
@@ -909,61 +873,62 @@ public class MainActivity extends Activity {
     }
 
     private View buildDashboardView() {
-        ScrollView scrollView = new ScrollView(this);
-        scrollView.setFillViewport(true);
-        scrollView.setBackgroundColor(COLOR_BG);
+        View view = getLayoutInflater().inflate(R.layout.activity_main, null);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(20), dp(18), dp(20));
-        scrollView.addView(root);
+        com.google.android.material.button.MaterialButton toggleBtn = view.findViewById(R.id.btnToggleClicker);
+        TextView subStatus = view.findViewById(R.id.textSubStatus);
+        TextView subExpires = view.findViewById(R.id.textSubExpires);
+        TextView tabDefault = view.findViewById(R.id.tabDefaultApp);
+        TextView tabOther = view.findViewById(R.id.tabOtherApp);
+        LinearLayout filtersContainer = view.findViewById(R.id.filtersContainer);
+        com.google.android.material.button.MaterialButton saveBtn = view.findViewById(R.id.btnSaveSettings);
 
-        // Fetch sub data
-        long subExpires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
-        int freeClicks = prefs.getInt(AcceptPrefs.KEY_FREE_CLICKS, 0);
-        String loggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "User");
+        boolean isEnabled = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
+        toggleBtn.setText(isEnabled ? "Stop Autoclicker" : "Start Autoclicker");
+        toggleBtn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(isEnabled ? COLOR_DANGER : COLOR_ACCENT));
 
-        // 1. Header Row
-        root.addView(buildHeaderView(loggedInUser, subExpires, freeClicks));
+        toggleBtn.setOnClickListener(v -> {
+            boolean current = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
+            prefs.edit().putBoolean(AcceptPrefs.KEY_ENABLED, !current).apply();
+            Toast.makeText(this, !current ? "Auto-Clicker Started" : "Auto-Clicker Stopped", Toast.LENGTH_SHORT).show();
+            setContentView(buildDashboardView());
+        });
 
-        // 2. Log Out Row
-        root.addView(buildLogOutRow(), matchWrapWithTop(12));
-
-        // 3. Info Description Card
-        root.addView(buildDescriptionCard(), matchWrapWithTop(12));
-
-        // 4. Accessibility Service Status Bar
-        root.addView(buildAccessibilityStatusCard(), matchWrapWithTop(12));
-
-        // 5. Actions Buttons (Side-by-Side)
-        root.addView(buildActionButtonsRow(), matchWrapWithTop(12));
-
-        // 6. App Mode Selection Card
-        root.addView(buildAppModeSelectionCard(), matchWrapWithTop(12));
-
-        // 7. Filters / Custom Settings Card (Conditional)
+        // App Mode logic
         String currentMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
         if ("custom".equals(currentMode)) {
-            root.addView(buildCustomAppSettingsCard(), matchWrapWithTop(12));
+            tabOther.setBackgroundResource(R.drawable.bg_button_primary);
+            tabOther.setBackgroundTintList(android.content.res.ColorStateList.valueOf(COLOR_SUCCESS));
+            tabOther.setTextColor(COLOR_BG);
+            tabDefault.setBackground(null);
+            tabDefault.setTextColor(COLOR_TEXT_SECONDARY);
+            filtersContainer.addView(buildCustomAppSettingsCard());
         } else {
-            root.addView(buildFiltersCard(), matchWrapWithTop(12));
+            tabDefault.setBackgroundResource(R.drawable.bg_button_primary);
+            tabDefault.setBackgroundTintList(android.content.res.ColorStateList.valueOf(COLOR_SUCCESS));
+            tabDefault.setTextColor(COLOR_BG);
+            tabOther.setBackground(null);
+            tabOther.setTextColor(COLOR_TEXT_SECONDARY);
+            filtersContainer.addView(buildFiltersCard());
         }
 
-        // 8. Save Settings Button
-        Button saveBtn = primaryButton("Save Settings");
+        tabDefault.setOnClickListener(v -> {
+            prefs.edit().putString(AcceptPrefs.KEY_APP_MODE, "rapido").apply();
+            setContentView(buildDashboardView());
+        });
+
+        tabOther.setOnClickListener(v -> {
+            prefs.edit().putString(AcceptPrefs.KEY_APP_MODE, "custom").apply();
+            setContentView(buildDashboardView());
+        });
+
         saveBtn.setOnClickListener(v -> saveSettings());
-        root.addView(saveBtn, matchWrapWithTop(18));
 
-        // 9. Footer
-        TextView footer = new TextView(this);
-        footer.setText("Auto-clicking for configured package. Distance limits are used only in default mode.");
-        footer.setTextColor(COLOR_TEXT_SECONDARY);
-        footer.setTextSize(12);
-        footer.setGravity(Gravity.CENTER);
-        footer.setPadding(0, dp(20), 0, dp(10));
-        root.addView(footer, matchWrap());
+        // Fill sub info
+        long expires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
+        subExpires.setText("Expires: " + formatExpiry(expires));
 
-        return scrollView;
+        return view;
     }
 
     private View buildHeaderView(String loggedInUser, long subExpires, int freeClicks) {
@@ -1184,98 +1149,36 @@ public class MainActivity extends Activity {
     private View buildActionButtonsRow() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setGravity(Gravity.CENTER);
 
-        // Left button: Open Accessibility Settings
-        LinearLayout openBtn = new LinearLayout(this);
-        openBtn.setOrientation(LinearLayout.HORIZONTAL);
-        openBtn.setGravity(Gravity.CENTER_VERTICAL);
-        openBtn.setBackground(roundedRect(COLOR_CARD, 12));
-        openBtn.setPadding(dp(12), dp(14), dp(12), dp(14));
-        openBtn.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+        boolean isEnabled = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
 
-        View gearIcon = circularIcon("⚙️", Color.rgb(30, 41, 59), 32);
-        openBtn.addView(gearIcon);
-
-        LinearLayout openTextSec = new LinearLayout(this);
-        openTextSec.setOrientation(LinearLayout.VERTICAL);
-        openTextSec.setPadding(dp(8), 0, dp(4), 0);
-
-        TextView openText = new TextView(this);
-        openText.setText("Open Accessibility");
-        openText.setTextColor(Color.WHITE);
-        openText.setTextSize(13);
-        openText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        
-        TextView openSubtext = new TextView(this);
-        openSubtext.setText("Settings");
-        openSubtext.setTextColor(COLOR_TEXT_SECONDARY);
-        openSubtext.setTextSize(11);
-
-        openTextSec.addView(openText);
-        openTextSec.addView(openSubtext);
-
-        LinearLayout.LayoutParams openTextParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
-        openBtn.addView(openTextSec, openTextParams);
-
-        TextView openChevron = new TextView(this);
-        openChevron.setText(">");
-        openChevron.setTextColor(COLOR_TEXT_SECONDARY);
-        openChevron.setTextSize(14);
-        openBtn.addView(openChevron);
-
-        LinearLayout.LayoutParams leftParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f);
-        leftParams.rightMargin = dp(8);
-        row.addView(openBtn, leftParams);
-
-        // Right button: Start/Stop Auto-Clicker
         LinearLayout toggleBtn = new LinearLayout(this);
         toggleBtn.setOrientation(LinearLayout.HORIZONTAL);
-        toggleBtn.setGravity(Gravity.CENTER_VERTICAL);
-        
-        boolean isEnabled = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
-        toggleBtn.setBackground(roundedRect(isEnabled ? COLOR_DANGER : COLOR_ACCENT, 12));
-        toggleBtn.setPadding(dp(12), dp(14), dp(12), dp(14));
+        toggleBtn.setGravity(Gravity.CENTER);
+        toggleBtn.setBackground(roundedRect(isEnabled ? COLOR_DANGER : COLOR_ACCENT, 16));
+        toggleBtn.setPadding(dp(20), dp(20), dp(20), dp(20));
 
-        View playIcon = circularIcon(isEnabled ? "⏹️" : "▶️", Color.WHITE, 32);
-        if (playIcon instanceof TextView) {
-            ((TextView) playIcon).setTextColor(isEnabled ? COLOR_DANGER : COLOR_ACCENT);
-        }
+        View playIcon = circularIcon(isEnabled ? "⏹️" : "▶️", Color.TRANSPARENT, 24);
         toggleBtn.addView(playIcon);
 
-        LinearLayout toggleTextSec = new LinearLayout(this);
-        toggleTextSec.setOrientation(LinearLayout.VERTICAL);
-        toggleTextSec.setPadding(dp(8), 0, 0, 0);
-
         TextView toggleText = new TextView(this);
-        toggleText.setText(isEnabled ? "STOP CLICKER" : "START CLICKER");
+        toggleText.setText(isEnabled ? "Stop Autoclicker" : "Start Autoclicker");
         toggleText.setTextColor(Color.WHITE);
-        toggleText.setTextSize(12);
+        toggleText.setTextSize(18);
         toggleText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-
-        TextView toggleSubtext = new TextView(this);
-        toggleSubtext.setText(isEnabled ? "Tap to pause clicks" : "Tap to start auto clicking");
-        toggleSubtext.setTextColor(Color.rgb(220, 252, 231));
-        toggleSubtext.setTextSize(10);
-
-        toggleTextSec.addView(toggleText);
-        toggleTextSec.addView(toggleSubtext);
-
-        toggleBtn.addView(toggleTextSec);
+        toggleText.setPadding(dp(12), 0, 0, 0);
+        toggleBtn.addView(toggleText);
 
         toggleBtn.setOnClickListener(v -> {
             boolean current = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
-            boolean next = !current;
-            prefs.edit().putBoolean(AcceptPrefs.KEY_ENABLED, next).apply();
-            
-            Toast.makeText(this, next ? "Auto-Clicker Started" : "Auto-Clicker Stopped", Toast.LENGTH_SHORT).show();
+            prefs.edit().putBoolean(AcceptPrefs.KEY_ENABLED, !current).apply();
+            Toast.makeText(this, !current ? "Auto-Clicker Started" : "Auto-Clicker Stopped", Toast.LENGTH_SHORT).show();
             setContentView(buildDashboardView());
         });
 
-        LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f);
-        rightParams.leftMargin = dp(8);
-        row.addView(toggleBtn, rightParams);
-
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        row.addView(toggleBtn, params);
         return row;
     }
 
