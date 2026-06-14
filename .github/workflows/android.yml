@@ -4,10 +4,13 @@ on:
   push:
     branches:
       - main
+      - dev
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Code
@@ -19,18 +22,32 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Automatically install Gradle on the GitHub runner
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.7'
 
-      # Notice we use 'gradle' instead of './gradlew' here
-      - name: Build APK
-        run: gradle assembleDebug
 
-      - name: Upload APK
+      - name: Build APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle assembleRelease
+
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: app-release
+          path: app/build/outputs/apk/release/*.apk
+
+      - name: Create or Update Latest Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          name: Latest Release
+          files: app/build/outputs/apk/release/*.apk
+          body: "Automated release of the latest Triplens APK."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
