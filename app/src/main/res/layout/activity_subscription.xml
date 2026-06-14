@@ -64,7 +64,7 @@
                 android:textColor="@color/colorTextSecondary"
                 android:textSize="13sp" />
 
-            <!-- Plan 1 -->
+            <!-- Daily Plan -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -76,7 +76,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Basic (Monthly)"
+                    android:text="Daily Plan"
                     android:textColor="@color/colorTextPrimary"
                     android:textSize="16sp"
                     android:textStyle="bold" />
@@ -84,23 +84,24 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="$19 /mo"
+                    android:text="₹19 /day"
                     android:textColor="@color/colorTextPrimary"
                     android:textSize="20sp"
                     android:textStyle="bold"
                     android:layout_marginTop="8dp" />
 
                 <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnPlanDaily"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:text="Switch to Basic"
+                    android:text="Buy Now"
                     android:textAllCaps="false"
-                    app:backgroundTint="@color/colorInputBg"
-                    android:textColor="@color/colorTextSecondary" />
+                    app:backgroundTint="@color/colorPrimary"
+                    android:textColor="@android:color/white" />
             </LinearLayout>
 
-            <!-- Plan 2 Active -->
+            <!-- Weekly Plan -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -112,7 +113,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Pro (Yearly)"
+                    android:text="Weekly Plan"
                     android:textColor="@color/colorTextPrimary"
                     android:textSize="16sp"
                     android:textStyle="bold" />
@@ -120,7 +121,44 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="$149 /yr"
+                    android:text="₹99 /week"
+                    android:textColor="@color/colorTextPrimary"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="8dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnPlanWeekly"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="Buy Now"
+                    android:textAllCaps="false"
+                    android:textColor="@android:color/white"
+                    app:backgroundTint="@color/colorPrimary" />
+            </LinearLayout>
+
+            <!-- Monthly Plan -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:layout_marginBottom="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Monthly Plan"
+                    android:textColor="@color/colorTextPrimary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+                
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="₹299 /month"
                     android:textColor="@color/colorTextPrimary"
                     android:textSize="20sp"
                     android:textStyle="bold"
@@ -129,16 +167,17 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Save 35% compared to monthly"
+                    android:text="Save compared to daily"
                     android:textColor="@color/colorSuccess"
                     android:textSize="10sp"
                     android:layout_marginTop="4dp" />
 
                 <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnPlanMonthly"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:text="Current Plan"
+                    android:text="Buy Now"
                     android:textAllCaps="false"
                     android:textColor="@android:color/white"
                     app:backgroundTint="@color/colorPrimary" />

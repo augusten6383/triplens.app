@@ -699,9 +699,15 @@ public class MainActivity extends Activity {
                         if (user != null) {
                             user.sendEmailVerification()
                                 .addOnCompleteListener(t -> {
-                                    Toast.makeText(MainActivity.this, "Registration successful! Please check your email to verify your account.", Toast.LENGTH_LONG).show();
-                                    mAuth.signOut();
-                                    setContentView(buildLoginView());
+                                    new android.app.AlertDialog.Builder(MainActivity.this)
+                                        .setTitle("Verification Email Sent")
+                                        .setMessage("A verification link has been sent to your email.\n\nPlease check your spam folder if not found in your inbox.")
+                                        .setPositiveButton("OK", (dialog, which) -> {
+                                            mAuth.signOut();
+                                            setContentView(buildLoginView());
+                                        })
+                                        .setCancelable(false)
+                                        .show();
                                 });
                         }
                     } else {
@@ -1318,7 +1324,7 @@ public class MainActivity extends Activity {
         // Add Filter Button
         Button addFilterBtn = new Button(this);
         addFilterBtn.setText("+ Add Filter");
-        addFilterBtn.setBackground(roundedRectWithBorder(COLOR_INPUT_BG, 12, COLOR_BORDER, 1));
+        addFilterBtn.setBackground(roundedRect(COLOR_ACCENT, 12));
         addFilterBtn.setTextColor(Color.WHITE);
         addFilterBtn.setAllCaps(false);
         addFilterBtn.setOnClickListener(v -> showAddFilterDialog());
@@ -1616,13 +1622,27 @@ public class MainActivity extends Activity {
         long now = System.currentTimeMillis() / 1000L;
         if (expires > now) {
             long diff = expires - now;
-            long days = diff / (60 * 60 * 24);
+            long days = (long) Math.ceil((double) diff / (60 * 60 * 24));
             daysLeft.setText(String.valueOf(days));
             subMsg.setText("Your Pro subscription is active.\nAutomation logs are being processed in real-time.");
         } else {
             daysLeft.setText("0");
             subMsg.setText("Your subscription has expired.\nPlease renew to continue auto-accepting.");
         }
+
+        View.OnClickListener planClickListener = v -> {
+            Intent browserIntent = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://qubesolutions.vercel.app/triplens/"));
+            startActivity(browserIntent);
+        };
+        
+        View btnPlanDaily = view.findViewById(R.id.btnPlanDaily);
+        if (btnPlanDaily != null) btnPlanDaily.setOnClickListener(planClickListener);
+        
+        View btnPlanWeekly = view.findViewById(R.id.btnPlanWeekly);
+        if (btnPlanWeekly != null) btnPlanWeekly.setOnClickListener(planClickListener);
+        
+        View btnPlanMonthly = view.findViewById(R.id.btnPlanMonthly);
+        if (btnPlanMonthly != null) btnPlanMonthly.setOnClickListener(planClickListener);
 
         LinearLayout navDash = view.findViewById(R.id.navDashboard);
         if (navDash != null) {

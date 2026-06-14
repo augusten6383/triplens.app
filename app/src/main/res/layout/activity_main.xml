@@ -172,9 +172,8 @@
                 android:layout_marginTop="16dp"
                 android:text="Save Filters"
                 android:textAllCaps="false"
-                app:backgroundTint="@color/colorCard"
-                app:strokeColor="@color/colorBorder"
-                app:strokeWidth="1dp"/>
+                android:textColor="@android:color/white"
+                app:backgroundTint="@color/colorPrimary"/>
 
         </LinearLayout>
     </ScrollView>
