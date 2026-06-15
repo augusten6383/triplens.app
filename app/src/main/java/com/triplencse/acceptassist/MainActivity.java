@@ -91,7 +91,7 @@ public class MainActivity extends Activity {
 
     private void checkAppUpdate() {
         isCheckingUpdates = true;
-        String updateUrl = "https://raw.githubusercontent.com/augusten6383/triplens.app/main/version.json";
+        String updateUrl = "https://triplens-three.vercel.app/version.json";
         new Thread(() -> {
             try {
                 java.net.URL url = new java.net.URL(updateUrl);
