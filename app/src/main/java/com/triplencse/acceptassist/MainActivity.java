@@ -771,6 +771,7 @@ public class MainActivity extends Activity {
         TextView tabOther = view.findViewById(R.id.tabOtherApp);
         LinearLayout filtersContainer = view.findViewById(R.id.filtersContainer);
         com.google.android.material.button.MaterialButton saveBtn = view.findViewById(R.id.btnSaveSettings);
+        com.google.android.material.button.MaterialButton viewLogsBtn = view.findViewById(R.id.btnViewLogs);
 
         boolean isEnabled = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
         toggleBtn.setText(isEnabled ? "Stop Autoclicker" : "Start Autoclicker");
@@ -812,6 +813,7 @@ public class MainActivity extends Activity {
         });
 
         saveBtn.setOnClickListener(v -> saveSettings());
+        viewLogsBtn.setOnClickListener(v -> DebugLogManager.showLogsDialog(this));
 
         // Fill sub info
         long expires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);

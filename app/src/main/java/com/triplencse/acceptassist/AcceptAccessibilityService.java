@@ -324,8 +324,13 @@ public class AcceptAccessibilityService extends AccessibilityService {
 
                     if (finalAccept) {
                         targetNode = button;
+                        DebugLogManager.log(this, "ACCEPTED", String.format(Locale.US, "Pickup: %.1fkm, Drop: %.1fkm, ₹%.1f", pickupKm, dropKm, totalPrice));
                         break; // Found a valid order!
                     } else {
+                        String reason = "Distance or Price limits exceeded.";
+                        if (hasDistFilters && !distPass) reason = "Distance limits exceeded.";
+                        if (hasPriceFilters && !pricePass) reason = "Price limits not met.";
+                        DebugLogManager.log(this, "REJECTED", reason + String.format(Locale.US, " (Pickup: %.1fkm, Drop: %.1fkm, ₹%.1f)", pickupKm, dropKm, totalPrice));
                         uiHandler.post(() -> android.widget.Toast.makeText(this, "Ignored: Filter limits exceeded", android.widget.Toast.LENGTH_SHORT).show());
                     }
                 } else {
@@ -346,12 +351,14 @@ public class AcceptAccessibilityService extends AccessibilityService {
         long subExpires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
 
         if ("blocked".equalsIgnoreCase(status)) {
+            DebugLogManager.log(this, "BLOCKED", "Account blocked by administrator.");
             uiHandler.post(() -> android.widget.Toast.makeText(this, "Click blocked: Account blocked by administrator", android.widget.Toast.LENGTH_LONG).show());
             return;
         }
 
         boolean isSubscribed = subExpires > (System.currentTimeMillis() / 1000L);
         if (!isSubscribed && freeClicks <= 0) {
+            DebugLogManager.log(this, "BLOCKED", "Subscription expired and no free clicks left.");
             uiHandler.post(() -> android.widget.Toast.makeText(this, "Click blocked: Subscription required", android.widget.Toast.LENGTH_LONG).show());
             return;
         }
