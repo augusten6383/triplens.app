@@ -278,6 +278,15 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void showErrorDialog(String title, String message) {
+        new android.app.AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("OK", null)
+            .setIcon(android.R.drawable.ic_dialog_alert)
+            .show();
+    }
+
     // Dynamic UI Styling Helpers
     private android.graphics.drawable.GradientDrawable roundedRect(int color, float radiusDp) {
         android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
@@ -532,7 +541,7 @@ public class MainActivity extends Activity {
 
                 @Override
                 public void onError(String message) {
-                    Toast.makeText(MainActivity.this, "Connection failed: " + message, Toast.LENGTH_LONG).show();
+                    showErrorDialog("Connection Failed", message);
                 }
             });
         });
@@ -579,7 +588,7 @@ public class MainActivity extends Activity {
                                     }
                                     @Override
                                     public void onError(String message) {
-                                        Toast.makeText(MainActivity.this, "Server sync failed: " + message, Toast.LENGTH_LONG).show();
+                                        showErrorDialog("Sync Failed", message);
                                     }
                                 });
                             } else {
@@ -609,7 +618,7 @@ public class MainActivity extends Activity {
                             }
                         }
                     } else {
-                        Toast.makeText(this, "Login failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                        showErrorDialog("Login Failed", task.getException() != null ? task.getException().getMessage() : "Unknown error");
                     }
                 });
         });
@@ -634,7 +643,7 @@ public class MainActivity extends Activity {
                 GoogleSignInAccount account = task.getResult(ApiException.class);
                 firebaseAuthWithGoogle(account.getIdToken());
             } catch (ApiException e) {
-                Toast.makeText(this, "Google sign in failed", Toast.LENGTH_SHORT).show();
+                showErrorDialog("Sign In Failed", "Google sign in was cancelled or failed.");
             }
         }
     }
@@ -664,12 +673,12 @@ public class MainActivity extends Activity {
 
                                 @Override
                                 public void onError(String message) {
-                                    Toast.makeText(MainActivity.this, "Turso login failed: " + message, Toast.LENGTH_LONG).show();
+                                    showErrorDialog("Database Error", message);
                                 }
                             });
                         }
                     } else {
-                        Toast.makeText(MainActivity.this, "Firebase Authentication failed.", Toast.LENGTH_SHORT).show();
+                        showErrorDialog("Authentication Failed", "Could not verify your Google account.");
                     }
                 });
     }
@@ -711,7 +720,7 @@ public class MainActivity extends Activity {
                                 });
                         }
                     } else {
-                        Toast.makeText(this, "Sign Up Failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                        showErrorDialog("Registration Failed", task.getException() != null ? task.getException().getMessage() : "Unknown error");
                     }
                 });
         });
@@ -742,7 +751,7 @@ public class MainActivity extends Activity {
                         Toast.makeText(MainActivity.this, "Reset link sent to your email.", Toast.LENGTH_LONG).show();
                         setContentView(buildLoginView());
                     } else {
-                        Toast.makeText(MainActivity.this, "Failed to send reset link: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                        showErrorDialog("Recovery Failed", task.getException() != null ? task.getException().getMessage() : "Unknown error");
                     }
                 });
         });

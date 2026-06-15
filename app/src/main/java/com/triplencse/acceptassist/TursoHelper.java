@@ -25,6 +25,18 @@ public final class TursoHelper {
         void onError(String message);
     }
 
+    private static long lastAuthCallTime = 0;
+    private static final long AUTH_COOLDOWN_MS = 2000;
+
+    private static boolean isRateLimited() {
+        long now = System.currentTimeMillis();
+        if (now - lastAuthCallTime < AUTH_COOLDOWN_MS) {
+            return true;
+        }
+        lastAuthCallTime = now;
+        return false;
+    }
+
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     private TursoHelper() {
@@ -104,8 +116,12 @@ public final class TursoHelper {
                 JSONArray argsArray = new JSONArray();
                 for (Object arg : args) {
                     JSONObject argObj = new JSONObject();
-                    argObj.put("type", "text");
-                    argObj.put("value", String.valueOf(arg));
+                    if (arg == null) {
+                        argObj.put("type", "null");
+                    } else {
+                        argObj.put("type", "text");
+                        argObj.put("value", String.valueOf(arg));
+                    }
                     argsArray.put(argObj);
                 }
                 stmtObj.put("args", argsArray);
@@ -176,6 +192,15 @@ public final class TursoHelper {
                                 } else {
                                     errMsg = firstResult.optString("message", errMsg);
                                 }
+                                
+                                if (errMsg.contains("UNIQUE constraint failed: users.email")) {
+                                    errMsg = "This email is already registered.";
+                                } else if (errMsg.contains("UNIQUE constraint failed: users.username")) {
+                                    errMsg = "This username is taken.";
+                                } else if (errMsg.contains("UNIQUE constraint failed: users.phone")) {
+                                    errMsg = "This phone number is already registered.";
+                                }
+                                
                                 final String finalErrMsg = errMsg;
                                 handler.post(() -> callback.onError(finalErrMsg));
                             } else {
@@ -211,8 +236,14 @@ public final class TursoHelper {
                     handler.post(() -> callback.onError(finalError));
                 }
             } catch (Exception e) {
-                final String errorMsg = e.getMessage() != null ? e.getMessage() : "Network error";
-                handler.post(() -> callback.onError(errorMsg));
+                String errorMsg;
+                if (e instanceof java.net.ConnectException || e instanceof java.net.UnknownHostException || e instanceof java.net.SocketTimeoutException) {
+                    errorMsg = "Network error. Please check your internet connection.";
+                } else {
+                    errorMsg = e.getMessage() != null ? e.getMessage() : "Network error";
+                }
+                final String finalErrorMsg = errorMsg;
+                handler.post(() -> callback.onError(finalErrorMsg));
             } finally {
                 if (conn != null) {
                     conn.disconnect();
@@ -264,12 +295,17 @@ public final class TursoHelper {
     }
 
     public static void signUpUser(Context ctx, String username, String email, String phone, String password, String question, String answer, Callback callback) {
+        if (isRateLimited()) {
+            callback.onError("Please wait a moment before trying again.");
+            return;
+        }
         long threeDaysSeconds = (System.currentTimeMillis() / 1000L) + (3 * 24 * 60 * 60);
         String sql = "INSERT INTO users (username, email, phone, password, recovery_question, recovery_answer, status, free_clicks_remaining, subscription_expires_at) VALUES (?, ?, ?, ?, ?, ?, 'active', 0, ?);";
         List<Object> args = new ArrayList<>();
         args.add(username.trim().toLowerCase());
         args.add(email.trim().toLowerCase());
-        args.add(phone.trim());
+        String cleanPhone = phone != null ? phone.trim() : "";
+        args.add(cleanPhone.isEmpty() ? null : cleanPhone);
         args.add(hashPassword(password));
         args.add(question.trim());
         args.add(answer.trim().toLowerCase());
@@ -278,6 +314,10 @@ public final class TursoHelper {
     }
 
     public static void loginUser(Context ctx, String usernameOrEmail, String password, Callback callback) {
+        if (isRateLimited()) {
+            callback.onError("Please wait a moment before trying again.");
+            return;
+        }
         String sql = "SELECT username, email, phone, password FROM users WHERE username = ? OR email = ?;";
         List<Object> args = new ArrayList<>();
         args.add(usernameOrEmail.trim().toLowerCase());
@@ -382,6 +422,10 @@ public final class TursoHelper {
     }
 
     public static void googleSignInUser(Context ctx, String email, Callback callback) {
+        if (isRateLimited()) {
+            callback.onError("Please wait a moment before trying again.");
+            return;
+        }
         String emailLower = email.trim().toLowerCase();
         String checkSql = "SELECT username FROM users WHERE username = ? OR email = ?;";
         List<Object> checkArgs = new ArrayList<>();
@@ -394,10 +438,11 @@ public final class TursoHelper {
                     callback.onSuccess(rows);
                 } else {
                     long threeDaysSeconds = (System.currentTimeMillis() / 1000L) + (3 * 24 * 60 * 60);
-                    String insertSql = "INSERT INTO users (username, email, phone, password, recovery_question, recovery_answer, status, free_clicks_remaining, subscription_expires_at) VALUES (?, ?, '', '', '', '', 'active', 0, ?);";
+                    String insertSql = "INSERT INTO users (username, email, phone, password, recovery_question, recovery_answer, status, free_clicks_remaining, subscription_expires_at) VALUES (?, ?, ?, '', '', '', 'active', 0, ?);";
                     List<Object> insertArgs = new ArrayList<>();
                     insertArgs.add(emailLower);
                     insertArgs.add(emailLower);
+                    insertArgs.add(null);
                     insertArgs.add(threeDaysSeconds);
                     executePipeline(ctx, insertSql, insertArgs, new Callback() {
                         @Override
