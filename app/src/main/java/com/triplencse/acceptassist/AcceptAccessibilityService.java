@@ -143,14 +143,16 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return;
         }
 
-        int delayMs = 50; // Hardcoded delay
-
-        // Remove any previously scheduled checks and reschedule for [delayMs] after the LATEST event
+        // Cancel any active polling sequences
         handler.removeCallbacksAndMessages(null);
-        final String finalTargetPackage = targetPackage;
-        handler.postDelayed(() -> {
-            clickIfMatched(finalTargetPackage);
-        }, delayMs);
+
+        // Immediate check (0ms)
+        if (clickIfMatched(targetPackage)) {
+            return;
+        }
+
+        // If not matched immediately, start the high-frequency polling loop
+        handler.post(new PollingRunnable(targetPackage, System.currentTimeMillis()));
     }
 
     @Override
@@ -159,10 +161,52 @@ public class AcceptAccessibilityService extends AccessibilityService {
         handler.removeCallbacksAndMessages(null);
     }
 
-    private void clickIfMatched(String packageName) {
+    private class PollingRunnable implements Runnable {
+        private final String targetPackage;
+        private final long startTime;
+
+        PollingRunnable(String targetPackage, long startTime) {
+            this.targetPackage = targetPackage;
+            this.startTime = startTime;
+        }
+
+        @Override
+        public void run() {
+            SharedPreferences prefs = getSharedPreferences(AcceptPrefs.NAME, MODE_PRIVATE);
+            long now = System.currentTimeMillis();
+            if (now - prefs.getLong(AcceptPrefs.KEY_LAST_CLICK_MS, 0L) < CLICK_COOLDOWN_MS) {
+                return;
+            }
+
+            if (clickIfMatched(targetPackage)) {
+                return; // Clicked successfully, stop polling
+            }
+
+            long elapsed = System.currentTimeMillis() - startTime;
+            long nextDelay = -1;
+
+            if (elapsed < 8) {
+                nextDelay = 8 - elapsed;
+            } else if (elapsed >= 8 && elapsed < 12) {
+                nextDelay = 1; // Poll every 1ms in the 8-12ms window
+            } else if (elapsed >= 12 && elapsed < 16) {
+                nextDelay = 16 - elapsed;
+            } else if (elapsed >= 16 && elapsed < 20) {
+                nextDelay = 1; // Poll every 1ms in the 16-20ms window
+            } else if (elapsed >= 20 && elapsed < 120) {
+                nextDelay = 10; // Poll every 10ms thereafter until 120ms
+            }
+
+            if (nextDelay > 0 && (elapsed + nextDelay) <= 120) {
+                handler.postDelayed(this, nextDelay);
+            }
+        }
+    }
+
+    private boolean clickIfMatched(String packageName) {
         SharedPreferences prefs = getSharedPreferences(AcceptPrefs.NAME, MODE_PRIVATE);
         if (!prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false)) {
-            return;
+            return false;
         }
 
         String targetText = "Accept";
@@ -195,7 +239,7 @@ public class AcceptAccessibilityService extends AccessibilityService {
         }
 
         if (allButtons.isEmpty()) {
-            return;
+            return false;
         }
 
         // --- Distance Filtering Logic for Multiple Orders ---
@@ -342,7 +386,7 @@ public class AcceptAccessibilityService extends AccessibilityService {
         }
 
         if (targetNode == null) {
-            return;
+            return false;
         }
 
         // Perform status / subscription checks right before the click is made
@@ -353,14 +397,14 @@ public class AcceptAccessibilityService extends AccessibilityService {
         if ("blocked".equalsIgnoreCase(status)) {
             DebugLogManager.log(this, "BLOCKED", "Account blocked by administrator.");
             uiHandler.post(() -> android.widget.Toast.makeText(this, "Click blocked: Account blocked by administrator", android.widget.Toast.LENGTH_LONG).show());
-            return;
+            return false;
         }
 
         boolean isSubscribed = subExpires > (System.currentTimeMillis() / 1000L);
         if (!isSubscribed && freeClicks <= 0) {
             DebugLogManager.log(this, "BLOCKED", "Subscription expired and no free clicks left.");
             uiHandler.post(() -> android.widget.Toast.makeText(this, "Click blocked: Subscription required", android.widget.Toast.LENGTH_LONG).show());
-            return;
+            return false;
         }
 
         if (!isSubscribed && freeClicks > 0) {
@@ -381,8 +425,7 @@ public class AcceptAccessibilityService extends AccessibilityService {
         AccessibilityNodeInfo node = targetNode;
         uiHandler.post(() -> android.widget.Toast.makeText(this, "Triplens: Distance valid! Clicking...", android.widget.Toast.LENGTH_SHORT).show());
 
-
-
+        boolean clicked = false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             Rect bounds = new Rect();
             node.getBoundsInScreen(bounds);
@@ -406,6 +449,7 @@ public class AcceptAccessibilityService extends AccessibilityService {
                 }
             }, null);
 
+            clicked = true;
             // Also try normal click simultaneously just in case
             if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
                 prefs.edit().putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis()).apply();
@@ -414,8 +458,10 @@ public class AcceptAccessibilityService extends AccessibilityService {
             // Fallback for very old Android versions
             if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
                 prefs.edit().putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis()).apply();
+                clicked = true;
             }
         }
+        return clicked;
     }
 
     private AccessibilityNodeInfo findClickableMatch(AccessibilityNodeInfo root, String targetText) {
