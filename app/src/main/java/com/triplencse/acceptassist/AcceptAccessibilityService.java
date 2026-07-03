@@ -10,6 +10,7 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 
 import java.util.Locale;
+import java.util.regex.Pattern;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -20,20 +21,62 @@ import android.accessibilityservice.GestureDescription;
 import android.graphics.Path;
 import android.graphics.Rect;
 
+import android.view.WindowManager;
+import android.graphics.PixelFormat;
+import android.view.Gravity;
+import android.widget.ImageView;
+import android.view.View;
+import android.view.MotionEvent;
+import android.graphics.drawable.GradientDrawable;
+import android.view.ViewGroup;
+
 public class AcceptAccessibilityService extends AccessibilityService {
     private static final long CLICK_COOLDOWN_MS = 650;
     private static final int NOTIFICATION_ID = 1001;
     private static final String CHANNEL_ID = "AcceptAssistServiceChannel";
 
+    // Precompiled regex patterns to avoid recompiling them on every click evaluation
+    private static final Pattern DIST_PATTERN = Pattern.compile("([0-9.]+)\\s*(km|m)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern BASE_PRICE_PATTERN = Pattern.compile("₹\\s*([0-9]+(?:\\.[0-9]{1,2})?)");
+    private static final Pattern BONUS_PRICE_PATTERN = Pattern.compile("\\+\\s*([0-9]+(?:\\.[0-9]{1,2})?)");
+
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean clickScheduled;
     private String scheduledPackage = "";
+
+    // Cache variables to avoid querying SharedPreferences in the 1ms polling loop
+    private boolean cacheEnabled;
+    private String cacheAppMode;
+    private String cacheTargetPackage;
+    private String cacheTargetText;
+    private float cacheMinPickup;
+    private float cacheMaxPickup;
+    private float cacheMinDrop;
+    private float cacheMaxDrop;
+    private String cacheUserStatus;
+    private int cacheFreeClicks;
+    private long cacheSubExpires;
+    private boolean cacheFilterMaxPickupActive;
+    private boolean cacheFilterDropActive;
+    private boolean cacheFilterPriceKmActive;
+    private boolean cacheFilterTotalPriceActive;
+    private float cacheMinPrice;
+    private float cacheMinPricePerKm;
+    private boolean cacheToggleDistPriceAnd;
+    private boolean cacheTogglePriceAnd;
+    private String cacheLoggedInUser;
+
+    // WindowManager overlay fields for floating bubble
+    private WindowManager windowManager;
+    private ImageView bubbleView;
+    private WindowManager.LayoutParams bubbleParams;
 
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
         applyDynamicServiceInfo();
         showRunningNotification();
+        showBubble();
     }
 
     private void showRunningNotification() {
@@ -70,7 +113,14 @@ public class AcceptAccessibilityService extends AccessibilityService {
     @Override
     public boolean onUnbind(Intent intent) {
         removeRunningNotification();
+        removeBubble();
         return super.onUnbind(intent);
+    }
+
+    @Override
+    public void onDestroy() {
+        removeBubble();
+        super.onDestroy();
     }
 
     private void removeRunningNotification() {
@@ -78,6 +128,120 @@ public class AcceptAccessibilityService extends AccessibilityService {
         if (manager != null) {
             manager.cancel(NOTIFICATION_ID);
         }
+    }
+
+    private void showBubble() {
+        if (bubbleView != null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(this)) {
+            return;
+        }
+
+        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        if (windowManager == null) return;
+
+        bubbleView = new ImageView(this);
+        bubbleView.setImageResource(R.mipmap.ic_launcher);
+
+        int size = dpToPx(60);
+        bubbleView.setLayoutParams(new ViewGroup.LayoutParams(size, size));
+
+        GradientDrawable shape = new GradientDrawable();
+        shape.setShape(GradientDrawable.OVAL);
+        shape.setColor(android.graphics.Color.WHITE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            bubbleView.setElevation(dpToPx(6));
+        }
+        bubbleView.setBackground(shape);
+        int padding = dpToPx(8);
+        bubbleView.setPadding(padding, padding, padding, padding);
+
+        int layoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            layoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            layoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        bubbleParams = new WindowManager.LayoutParams(
+                size,
+                size,
+                layoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+        );
+
+        bubbleParams.gravity = Gravity.TOP | Gravity.START;
+        bubbleParams.x = getResources().getDisplayMetrics().widthPixels - size - dpToPx(16);
+        bubbleParams.y = dpToPx(150);
+
+        bubbleView.setOnTouchListener(new View.OnTouchListener() {
+            private int initialX;
+            private int initialY;
+            private float initialTouchX;
+            private float initialTouchY;
+            private long clickStartTime;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        initialX = bubbleParams.x;
+                        initialY = bubbleParams.y;
+                        initialTouchX = event.getRawX();
+                        initialTouchY = event.getRawY();
+                        clickStartTime = System.currentTimeMillis();
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        bubbleParams.x = initialX + (int) (event.getRawX() - initialTouchX);
+                        bubbleParams.y = initialY + (int) (event.getRawY() - initialTouchY);
+
+                        int screenWidth = getResources().getDisplayMetrics().widthPixels;
+                        int screenHeight = getResources().getDisplayMetrics().heightPixels;
+                        if (bubbleParams.x < 0) bubbleParams.x = 0;
+                        if (bubbleParams.x > screenWidth - size) bubbleParams.x = screenWidth - size;
+                        if (bubbleParams.y < 0) bubbleParams.y = 0;
+                        if (bubbleParams.y > screenHeight - size) bubbleParams.y = screenHeight - size;
+
+                        windowManager.updateViewLayout(bubbleView, bubbleParams);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        long clickDuration = System.currentTimeMillis() - clickStartTime;
+                        float deltaX = Math.abs(event.getRawX() - initialTouchX);
+                        float deltaY = Math.abs(event.getRawY() - initialTouchY);
+
+                        if (clickDuration < 250 && deltaX < 10 && deltaY < 10) {
+                            openApp();
+                        }
+                        return true;
+                }
+                return false;
+            }
+        });
+
+        try {
+            windowManager.addView(bubbleView, bubbleParams);
+        } catch (Exception e) {
+            DebugLogManager.log(this, "BUBBLE", "Failed to add floating bubble: " + e.getMessage());
+        }
+    }
+
+    private void removeBubble() {
+        if (windowManager != null && bubbleView != null) {
+            try {
+                windowManager.removeView(bubbleView);
+            } catch (Exception ignored) {}
+            bubbleView = null;
+        }
+    }
+
+    private void openApp() {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        startActivity(intent);
+    }
+
+    private int dpToPx(int dp) {
+        return (int) (dp * getResources().getDisplayMetrics().density);
     }
 
     @Override
@@ -88,45 +252,78 @@ public class AcceptAccessibilityService extends AccessibilityService {
 
         SharedPreferences prefs = getSharedPreferences(AcceptPrefs.NAME, MODE_PRIVATE);
         AcceptPrefs.ensureDefaults(prefs);
-        if (!prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false)) {
+
+        // Cache preference configurations to prevent slow SharedPreferences reads in the loop
+        cacheEnabled = prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false);
+        if (!cacheEnabled) {
             return;
         }
 
         // Subscription verification check
-        String status = prefs.getString(AcceptPrefs.KEY_USER_STATUS, "active");
-        int freeClicks = prefs.getInt(AcceptPrefs.KEY_FREE_CLICKS, 0);
-        long subExpires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
+        cacheUserStatus = prefs.getString(AcceptPrefs.KEY_USER_STATUS, "active");
+        cacheFreeClicks = prefs.getInt(AcceptPrefs.KEY_FREE_CLICKS, 0);
+        cacheSubExpires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
 
-        if ("blocked".equalsIgnoreCase(status)) {
+        if ("blocked".equalsIgnoreCase(cacheUserStatus)) {
             return;
         }
-        boolean isSubscribed = subExpires > (System.currentTimeMillis() / 1000L);
-        if (!isSubscribed && freeClicks <= 0) {
+        boolean isSubscribed = cacheSubExpires > (System.currentTimeMillis() / 1000L);
+        if (!isSubscribed && cacheFreeClicks <= 0) {
             return;
         }
 
         String packageName = event.getPackageName().toString();
-        String appMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
-        String targetPackage = "com.rapido.rider";
-        if ("custom".equals(appMode)) {
-            targetPackage = prefs.getString(AcceptPrefs.KEY_CUSTOM_PACKAGE, "");
+        cacheAppMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
+        cacheTargetPackage = "com.rapido.rider";
+        if ("custom".equals(cacheAppMode)) {
+            cacheTargetPackage = prefs.getString(AcceptPrefs.KEY_CUSTOM_PACKAGE, "");
         }
 
-        if (TextUtils.isEmpty(targetPackage)) {
+        if (TextUtils.isEmpty(cacheTargetPackage)) {
             return;
         }
 
+        // Target matching text
+        cacheTargetText = "Accept";
+        if ("custom".equals(cacheAppMode)) {
+            cacheTargetText = prefs.getString(AcceptPrefs.KEY_CUSTOM_TARGET_TEXT, "Accept");
+            if (TextUtils.isEmpty(cacheTargetText)) {
+                cacheTargetText = "Accept";
+            }
+        }
+
+        cacheMinPickup = prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f);
+        cacheMaxPickup = prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f);
+        cacheMinDrop = prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f);
+        cacheMaxDrop = prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f);
+
+        cacheFilterMaxPickupActive = prefs.getBoolean(AcceptPrefs.KEY_FILTER_MAX_PICKUP_ACTIVE, false);
+        cacheFilterDropActive = prefs.getBoolean(AcceptPrefs.KEY_FILTER_DROP_ACTIVE, false);
+        cacheFilterPriceKmActive = prefs.getBoolean(AcceptPrefs.KEY_FILTER_PRICE_KM_ACTIVE, false);
+        cacheFilterTotalPriceActive = prefs.getBoolean(AcceptPrefs.KEY_FILTER_TOTAL_PRICE_ACTIVE, false);
+
+        cacheMinPrice = prefs.getFloat(AcceptPrefs.KEY_MIN_PRICE, 0.0f);
+        cacheMinPricePerKm = prefs.getFloat(AcceptPrefs.KEY_MIN_PRICE_PER_KM, 0.0f);
+        cacheToggleDistPriceAnd = prefs.getBoolean(AcceptPrefs.KEY_TOGGLE_DIST_PRICE_AND, true);
+        cacheTogglePriceAnd = prefs.getBoolean(AcceptPrefs.KEY_TOGGLE_PRICE_AND, false);
+        cacheLoggedInUser = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "");
+
         boolean targetWindowFound = false;
-        if (packageName.equals(targetPackage)) {
+        if (packageName.equals(cacheTargetPackage)) {
             targetWindowFound = true;
         } else {
-            java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
-            if (windows != null) {
-                for (android.view.accessibility.AccessibilityWindowInfo window : windows) {
-                    AccessibilityNodeInfo root = window.getRoot();
-                    if (root != null && root.getPackageName() != null && targetPackage.equals(root.getPackageName().toString())) {
-                        targetWindowFound = true;
-                        break;
+            AccessibilityNodeInfo activeRoot = getRootInActiveWindow();
+            if (activeRoot != null && activeRoot.getPackageName() != null && cacheTargetPackage.equals(activeRoot.getPackageName().toString())) {
+                targetWindowFound = true;
+            } else {
+                java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
+                if (windows != null) {
+                    for (android.view.accessibility.AccessibilityWindowInfo window : windows) {
+                        AccessibilityNodeInfo root = window.getRoot();
+                        if (root != null && root.getPackageName() != null && cacheTargetPackage.equals(root.getPackageName().toString())) {
+                            targetWindowFound = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -147,12 +344,12 @@ public class AcceptAccessibilityService extends AccessibilityService {
         handler.removeCallbacksAndMessages(null);
 
         // Immediate check (0ms)
-        if (clickIfMatched(targetPackage)) {
+        if (clickIfMatched(cacheTargetPackage)) {
             return;
         }
 
         // If not matched immediately, start the high-frequency polling loop
-        handler.post(new PollingRunnable(targetPackage, System.currentTimeMillis()));
+        handler.post(new PollingRunnable(cacheTargetPackage, System.currentTimeMillis()));
     }
 
     @Override
@@ -204,32 +401,35 @@ public class AcceptAccessibilityService extends AccessibilityService {
     }
 
     private boolean clickIfMatched(String packageName) {
-        SharedPreferences prefs = getSharedPreferences(AcceptPrefs.NAME, MODE_PRIVATE);
-        if (!prefs.getBoolean(AcceptPrefs.KEY_ENABLED, false)) {
+        if (!cacheEnabled) {
             return false;
         }
 
-        String targetText = "Accept";
-        String appMode = prefs.getString(AcceptPrefs.KEY_APP_MODE, "rapido");
-        if ("custom".equals(appMode)) {
-            targetText = prefs.getString(AcceptPrefs.KEY_CUSTOM_TARGET_TEXT, "Accept");
-            if (TextUtils.isEmpty(targetText)) {
-                targetText = "Accept";
+        java.util.List<AccessibilityNodeInfo> allButtons = new java.util.ArrayList<>();
+        java.util.List<AccessibilityNodeInfo> rootsToCheck = new java.util.ArrayList<>();
+
+        AccessibilityNodeInfo activeRoot = getRootInActiveWindow();
+        if (activeRoot != null && activeRoot.getPackageName() != null && packageName.equals(activeRoot.getPackageName().toString())) {
+            rootsToCheck.add(activeRoot);
+        } else {
+            java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
+            if (windows != null) {
+                for (android.view.accessibility.AccessibilityWindowInfo window : windows) {
+                    AccessibilityNodeInfo root = window.getRoot();
+                    if (root != null) rootsToCheck.add(root);
+                }
             }
         }
 
-        java.util.List<AccessibilityNodeInfo> allButtons = new java.util.ArrayList<>();
-        java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
-        for (android.view.accessibility.AccessibilityWindowInfo window : windows) {
-            AccessibilityNodeInfo root = window.getRoot();
-            if (root != null && root.getPackageName() != null && packageName.equals(root.getPackageName().toString())) {
+        for (AccessibilityNodeInfo root : rootsToCheck) {
+            if (root.getPackageName() != null && packageName.equals(root.getPackageName().toString())) {
                 java.util.List<AccessibilityNodeInfo> matches = new java.util.ArrayList<>();
-                collectMatches(root, targetText, matches);
-                
+                collectMatches(root, cacheTargetText, matches);
+
                 // Get the actual clickable buttons from the matches
                 for (AccessibilityNodeInfo match : matches) {
                     AccessibilityNodeInfo clickable = nearestClickable(match);
-                    if (clickable != null && clickable.isClickable() && isExactMatch(match, targetText)) {
+                    if (clickable != null && clickable.isClickable() && isExactMatch(match, cacheTargetText)) {
                         if (!allButtons.contains(clickable)) {
                             allButtons.add(clickable);
                         }
@@ -242,16 +442,10 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return false;
         }
 
-        // --- Distance Filtering Logic for Multiple Orders ---
-        float minPickup = prefs.getFloat(AcceptPrefs.KEY_MIN_PICKUP, 0.0f);
-        float maxPickup = prefs.getFloat(AcceptPrefs.KEY_MAX_PICKUP, 5.0f);
-        float minDrop = prefs.getFloat(AcceptPrefs.KEY_MIN_DROP, 0.0f);
-        float maxDrop = prefs.getFloat(AcceptPrefs.KEY_MAX_DROP, 15.0f);
-
         android.os.Handler uiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
         AccessibilityNodeInfo targetNode = null;
 
-        if ("custom".equals(appMode)) {
+        if ("custom".equals(cacheAppMode)) {
             // For custom app mode, bypass distance filters and accept the first found matching button
             targetNode = allButtons.get(0);
         } else {
@@ -267,10 +461,9 @@ public class AcceptAccessibilityService extends AccessibilityService {
                 StringBuilder cardText = new StringBuilder();
                 collectAllText(card, cardText);
 
-                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("([0-9.]+)\\s*(km|m)\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
-                java.util.regex.Matcher matcher = pattern.matcher(cardText.toString());
+                java.util.regex.Matcher matcher = DIST_PATTERN.matcher(cardText.toString());
                 java.util.List<Float> distances = new java.util.ArrayList<>();
-                
+
                 while (matcher.find()) {
                     try {
                         float val = Float.parseFloat(matcher.group(1));
@@ -295,75 +488,63 @@ public class AcceptAccessibilityService extends AccessibilityService {
                     // --- Extract Total Price ---
                     float basePrice = 0f;
                     float bonusPrice = 0f;
-                    
+
                     // First look for the main price with the ₹ symbol
-                    java.util.regex.Pattern basePattern = java.util.regex.Pattern.compile("₹\\s*([0-9]+(?:\\.[0-9]{1,2})?)");
-                    java.util.regex.Matcher baseMatcher = basePattern.matcher(cardText.toString());
+                    java.util.regex.Matcher baseMatcher = BASE_PRICE_PATTERN.matcher(cardText.toString());
                     if (baseMatcher.find()) {
                         try {
                             basePrice = Float.parseFloat(baseMatcher.group(1));
                         } catch (Exception ignored) {}
                     }
-                    
+
                     // Look for +XX bonus near the price
                     int priceIdx = cardText.toString().indexOf("₹");
                     if (priceIdx != -1) {
                         int endIdx = Math.min(priceIdx + 100, cardText.length());
                         String nearPrice = cardText.substring(priceIdx, endIdx);
-                        java.util.regex.Pattern bonusPattern = java.util.regex.Pattern.compile("\\+\\s*([0-9]+(?:\\.[0-9]{1,2})?)");
-                        java.util.regex.Matcher bonusMatcher = bonusPattern.matcher(nearPrice);
+                        java.util.regex.Matcher bonusMatcher = BONUS_PRICE_PATTERN.matcher(nearPrice);
                         if (bonusMatcher.find()) {
                             try {
                                 bonusPrice = Float.parseFloat(bonusMatcher.group(1));
                             } catch (Exception ignored) {}
                         }
                     }
-                    
+
                     float totalPrice = basePrice + bonusPrice;
                     float totalDistance = pickupKm + dropKm;
                     float pricePerKm = (totalDistance > 0 && totalPrice > 0) ? (totalPrice / totalDistance) : 0f;
 
-                    // --- Apply Smart Filters ---
-                    boolean filterMaxPickupActive = prefs.getBoolean(AcceptPrefs.KEY_FILTER_MAX_PICKUP_ACTIVE, false);
-                    boolean filterDropActive = prefs.getBoolean(AcceptPrefs.KEY_FILTER_DROP_ACTIVE, false);
-                    boolean filterPriceKmActive = prefs.getBoolean(AcceptPrefs.KEY_FILTER_PRICE_KM_ACTIVE, false);
-                    boolean filterTotalPriceActive = prefs.getBoolean(AcceptPrefs.KEY_FILTER_TOTAL_PRICE_ACTIVE, false);
-
-                    float minPrice = prefs.getFloat(AcceptPrefs.KEY_MIN_PRICE, 0.0f);
-                    float minPricePerKm = prefs.getFloat(AcceptPrefs.KEY_MIN_PRICE_PER_KM, 0.0f);
-                    boolean toggleDistPriceAnd = prefs.getBoolean(AcceptPrefs.KEY_TOGGLE_DIST_PRICE_AND, false);
-                    boolean togglePriceAnd = prefs.getBoolean(AcceptPrefs.KEY_TOGGLE_PRICE_AND, false);
-
-                    boolean hasDistFilters = filterMaxPickupActive || filterDropActive;
-                    boolean hasPriceFilters = filterPriceKmActive || filterTotalPriceActive;
+                    boolean hasDistFilters = cacheFilterMaxPickupActive || cacheFilterDropActive;
+                    boolean hasPriceFilters = cacheFilterPriceKmActive || cacheFilterTotalPriceActive;
 
                     boolean distPass = true;
                     if (hasDistFilters) {
-                        if (filterMaxPickupActive && pickupKm > maxPickup) distPass = false;
-                        if (filterDropActive && (dropKm < minDrop || dropKm > maxDrop)) distPass = false;
+                        if (cacheFilterMaxPickupActive && pickupKm > cacheMaxPickup) distPass = false;
+                        if (cacheFilterDropActive && (dropKm < cacheMinDrop || dropKm > cacheMaxDrop)) distPass = false;
                     }
 
                     boolean pricePass = false;
                     if (hasPriceFilters) {
-                        boolean kmPass = !filterPriceKmActive || (pricePerKm >= minPricePerKm);
-                        boolean totalPass = !filterTotalPriceActive || (totalPrice >= minPrice);
-                        if (togglePriceAnd) {
-                            pricePass = kmPass && totalPass;
+                        if (cacheTogglePriceAnd) {
+                            pricePass = (!cacheFilterPriceKmActive || pricePerKm >= cacheMinPricePerKm) &&
+                                        (!cacheFilterTotalPriceActive || totalPrice >= cacheMinPrice);
                         } else {
-                            pricePass = kmPass || totalPass;
+                            boolean p1 = cacheFilterPriceKmActive && (pricePerKm >= cacheMinPricePerKm);
+                            boolean p2 = cacheFilterTotalPriceActive && (totalPrice >= cacheMinPrice);
+                            pricePass = p1 || p2;
                         }
                     }
 
                     boolean finalAccept = true;
                     if (hasDistFilters && hasPriceFilters) {
-                        finalAccept = toggleDistPriceAnd ? (distPass && pricePass) : (distPass || pricePass);
+                        finalAccept = cacheToggleDistPriceAnd ? (distPass && pricePass) : (distPass || pricePass);
                     } else if (hasDistFilters) {
                         finalAccept = distPass;
                     } else if (hasPriceFilters) {
                         finalAccept = pricePass;
                     } else if (!hasDistFilters && !hasPriceFilters) {
                         // Fallback to old behavior if no toggles are active
-                        finalAccept = (pickupKm >= minPickup && pickupKm <= maxPickup && dropKm >= minDrop && dropKm <= maxDrop);
+                        finalAccept = (pickupKm >= cacheMinPickup && pickupKm <= cacheMaxPickup && dropKm >= cacheMinDrop && dropKm <= cacheMaxDrop);
                     }
 
                     if (finalAccept) {
@@ -389,33 +570,29 @@ public class AcceptAccessibilityService extends AccessibilityService {
             return false;
         }
 
-        // Perform status / subscription checks right before the click is made
-        String status = prefs.getString(AcceptPrefs.KEY_USER_STATUS, "active");
-        int freeClicks = prefs.getInt(AcceptPrefs.KEY_FREE_CLICKS, 0);
-        long subExpires = prefs.getLong(AcceptPrefs.KEY_SUB_EXPIRES, 0L);
-
-        if ("blocked".equalsIgnoreCase(status)) {
+        if ("blocked".equalsIgnoreCase(cacheUserStatus)) {
             DebugLogManager.log(this, "BLOCKED", "Account blocked by administrator.");
             uiHandler.post(() -> android.widget.Toast.makeText(this, "Click blocked: Account blocked by administrator", android.widget.Toast.LENGTH_LONG).show());
             return false;
         }
 
-        boolean isSubscribed = subExpires > (System.currentTimeMillis() / 1000L);
-        if (!isSubscribed && freeClicks <= 0) {
+        boolean isSubscribed = cacheSubExpires > (System.currentTimeMillis() / 1000L);
+        if (!isSubscribed && cacheFreeClicks <= 0) {
             DebugLogManager.log(this, "BLOCKED", "Subscription expired and no free clicks left.");
             uiHandler.post(() -> android.widget.Toast.makeText(this, "Click blocked: Subscription required", android.widget.Toast.LENGTH_LONG).show());
             return false;
         }
 
-        if (!isSubscribed && freeClicks > 0) {
+        SharedPreferences prefs = getSharedPreferences(AcceptPrefs.NAME, MODE_PRIVATE);
+        if (!isSubscribed && cacheFreeClicks > 0) {
             // Decrement local free clicks
-            int newClicks = freeClicks - 1;
+            int newClicks = cacheFreeClicks - 1;
+            cacheFreeClicks = newClicks;
             prefs.edit().putInt(AcceptPrefs.KEY_FREE_CLICKS, newClicks).apply();
 
             // Notify server in the background
-            String username = prefs.getString(AcceptPrefs.KEY_LOGGED_IN_USER, "");
-            if (!username.isEmpty()) {
-                TursoHelper.useFreeClick(this, username, new TursoHelper.Callback() {
+            if (!cacheLoggedInUser.isEmpty()) {
+                TursoHelper.useFreeClick(this, cacheLoggedInUser, new TursoHelper.Callback() {
                     @Override public void onSuccess(org.json.JSONArray rows) {}
                     @Override public void onError(String message) {}
                 });
@@ -435,24 +612,45 @@ public class AcceptAccessibilityService extends AccessibilityService {
             Path clickPath = new Path();
             clickPath.moveTo(x, y);
             clickPath.lineTo(x + 1, y + 1); // Tiny movement to ensure Android registers it as a valid touch
-            
+
             // Increased duration to 150ms to ensure it's not ignored as a phantom touch
             GestureDescription.StrokeDescription clickStroke = new GestureDescription.StrokeDescription(clickPath, 0, 150);
             GestureDescription.Builder clickBuilder = new GestureDescription.Builder();
             clickBuilder.addStroke(clickStroke);
 
-            dispatchGesture(clickBuilder.build(), new GestureResultCallback() {
+            boolean dispatched = dispatchGesture(clickBuilder.build(), new GestureResultCallback() {
                 @Override
                 public void onCompleted(GestureDescription gestureDescription) {
                     super.onCompleted(gestureDescription);
                     prefs.edit().putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis()).apply();
                 }
+
+                @Override
+                public void onCancelled(GestureDescription gestureDescription) {
+                    super.onCancelled(gestureDescription);
+                    // Fallback immediately if gesture is cancelled by system
+                    uiHandler.post(() -> {
+                        if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                            prefs.edit().putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis()).apply();
+                        }
+                    });
+                }
             }, null);
 
-            clicked = true;
-            // Also try normal click simultaneously just in case
-            if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-                prefs.edit().putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis()).apply();
+            // Staggered fallback: If physical gesture failed to start, click immediately.
+            // Otherwise, wait 250ms (after the gesture finishes) to try the programmatic click as a backup.
+            if (!dispatched) {
+                if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                    prefs.edit().putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis()).apply();
+                    clicked = true;
+                }
+            } else {
+                clicked = true;
+                uiHandler.postDelayed(() -> {
+                    if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                        prefs.edit().putLong(AcceptPrefs.KEY_LAST_CLICK_MS, System.currentTimeMillis()).apply();
+                    }
+                }, 250);
             }
         } else {
             // Fallback for very old Android versions
